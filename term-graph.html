@@ -1,0 +1,1120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Term Graph</title>
+
+<style>
+/* ======================================================================
+   CUSTOMIZATION POINTS — CSS
+   Everything an artist would want to reskin lives up here as CSS
+   variables. Change these values (or override the classes below) to
+   restyle nodes, edges, and the background without touching any JS.
+   ====================================================================== */
+:root {
+  --bg-color: #f7dbe2;
+  --grid-color: rgba(150, 60, 90, 0.07);
+  --grid-size: 32px;
+
+  --node-size: 84px;
+  --node-color: #45c4b0;
+  --node-border-color: #ffffff;
+  --node-border-width: 2px;
+  --node-text-color: #ffffff;
+  --node-font: 14px system-ui, sans-serif;
+  --node-selected-glow: #ffcc33;
+  --node-pending-glow: #35e07a;
+
+  --edge-color: rgba(150, 70, 95, 0.35);
+  --edge-width: 2px;
+  --edge-selected-color: #ff6b9d;
+  --edge-label-color: #5a2f3d;
+  --edge-label-bg: #f7dbe2;
+
+  --panel-bg: #1b1e27;
+  --panel-text: #e8ecf7;
+  --panel-border: #333849;
+  --accent: #3a6df0;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  background: var(--bg-color);
+  font-family: system-ui, -apple-system, sans-serif;
+  color: var(--panel-text);
+  overflow: hidden;
+}
+
+/* ---------- Toolbar ---------- */
+#toolbar {
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  height: 56px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px;
+  background: var(--panel-bg);
+  border-bottom: 1px solid var(--panel-border);
+  z-index: 20;
+}
+
+#toolbar input[type="text"] {
+  flex: 0 0 220px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--panel-border);
+  background: #10121a;
+  color: var(--panel-text);
+  font-size: 14px;
+}
+
+button {
+  padding: 8px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--panel-border);
+  background: #262b3a;
+  color: var(--panel-text);
+  cursor: pointer;
+  font-size: 13px;
+}
+button:hover { background: #313749; }
+button.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+button.danger:hover { background: #7a2a2a; }
+
+/* Buttons hidden for now — toggle this off to bring the toolbar controls back. */
+#toolbar button { display: none; }
+
+#toolbar .spacer { flex: 1; }
+#hint {
+  font-size: 12px;
+  color: #8b93a7;
+  max-width: 360px;
+}
+
+/* ---------- Canvas / viewport ---------- */
+#viewport {
+  position: absolute;
+  top: 56px; left: 0; right: 0; bottom: 0;
+  overflow: hidden;
+  background-image:
+    linear-gradient(var(--grid-color) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid-color) 1px, transparent 1px);
+  background-size: var(--grid-size) var(--grid-size);
+  cursor: grab;
+}
+#viewport.panning { cursor: grabbing; }
+
+/* This div is what actually pans & zooms. Nodes and the edge SVG both
+   live inside it, so they move/scale together. */
+#world {
+  position: absolute;
+  top: 0; left: 0;
+  width: 0; height: 0; /* children are positioned absolutely, so size is irrelevant */
+  transform-origin: 0 0;
+}
+
+#edge-layer {
+  position: absolute;
+  top: 0; left: 0;
+  overflow: visible;
+  pointer-events: none; /* re-enabled per-edge via CSS below */
+}
+#edge-layer .edge-hit {
+  stroke: transparent;
+  stroke-width: 16px;
+  fill: none;
+  pointer-events: stroke;
+  cursor: pointer;
+}
+#edge-layer .edge-line {
+  stroke: var(--edge-color);
+  stroke-width: var(--edge-width);
+  fill: none;
+}
+#edge-layer .edge.selected .edge-line {
+  stroke: var(--edge-selected-color);
+  stroke-width: calc(var(--edge-width) + 1px);
+}
+#edge-layer .edge-label {
+  fill: var(--edge-label-color);
+  font-size: 11px;
+  text-anchor: middle;
+  pointer-events: none;
+}
+#edge-layer .edge-label-bg {
+  fill: var(--edge-label-bg);
+  opacity: 0.85;
+}
+
+/* ---------- Nodes ----------
+   A node is a plain div. Swap --node-color, or set a per-node
+   background-image (see .node[data-has-image]) to use your own art. */
+.node {
+  position: absolute;
+  width: var(--node-size);
+  height: var(--node-size);
+  margin-left: calc(var(--node-size) / -2);
+  margin-top: calc(var(--node-size) / -2);
+  border-radius: 50%;
+  background-color: var(--node-color);
+  background-size: cover;
+  background-position: center;
+  border: var(--node-border-width) solid var(--node-border-color);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 6px;
+  color: var(--node-text-color);
+  font: var(--node-font);
+  cursor: grab;
+  user-select: none;
+  touch-action: none;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.4);
+}
+.node.dragging { cursor: grabbing; }
+.node.selected {
+  box-shadow: 0 0 0 3px var(--node-selected-glow), 0 2px 6px rgba(0,0,0,0.4);
+}
+.node.pending-link {
+  box-shadow: 0 0 0 3px var(--node-pending-glow), 0 2px 6px rgba(0,0,0,0.4);
+}
+.node .label {
+  pointer-events: none;
+  word-break: break-word;
+  /* When a background image is set, the label sits over it. Feel free
+     to hide the label entirely in that case if your art speaks for itself. */
+}
+.node[data-has-image="true"] .label {
+  background: rgba(0,0,0,0.45);
+  border-radius: 4px;
+  padding: 1px 4px;
+}
+
+/* ---------- Inspector panel ---------- */
+#inspector {
+  position: fixed;
+  top: 66px;
+  right: 12px;
+  width: 260px;
+  background: var(--panel-bg);
+  border: 1px solid var(--panel-border);
+  border-radius: 8px;
+  padding: 14px;
+  z-index: 20;
+  display: none;
+}
+#inspector.visible { display: block; }
+#inspector h3 {
+  margin: 0 0 10px 0;
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #9aa3ba;
+}
+#inspector label {
+  display: block;
+  font-size: 12px;
+  color: #9aa3ba;
+  margin: 10px 0 4px;
+}
+#inspector input[type="text"],
+#inspector input[type="color"] {
+  width: 100%;
+  padding: 6px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--panel-border);
+  background: #10121a;
+  color: var(--panel-text);
+  font-size: 13px;
+}
+#inspector .row {
+  display: flex;
+  gap: 8px;
+  margin-top: 14px;
+}
+#inspector .row button { flex: 1; }
+
+/* ---------- Window-switcher context menu ---------- */
+#window-menu {
+  position: fixed;
+  min-width: 160px;
+  background: var(--panel-bg);
+  border: 1px solid var(--panel-border);
+  border-radius: 8px;
+  padding: 6px;
+  z-index: 30;
+  display: none;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.35);
+}
+#window-menu.visible { display: block; }
+#window-menu .window-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--panel-text);
+}
+#window-menu .window-menu-item:hover { background: #262b3a; }
+#window-menu .window-menu-item.current { background: #262b3a; font-weight: 600; }
+#window-menu .swatch {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 1px solid rgba(255,255,255,0.3);
+  flex-shrink: 0;
+}
+
+/* ---------- Zoom readout ---------- */
+#zoom-readout {
+  position: fixed;
+  bottom: 12px;
+  left: 12px;
+  font-size: 12px;
+  color: #8b93a7;
+  background: rgba(27,30,39,0.8);
+  padding: 4px 8px;
+  border-radius: 6px;
+  z-index: 20;
+}
+</style>
+</head>
+<body>
+
+<div id="toolbar">
+  <input type="text" id="term-input" placeholder="New term... (Enter to add)" maxlength="60">
+  <button id="add-btn">+ Add Term</button>
+  <button id="link-mode-btn" title="Toggle link mode, then click two nodes to connect them">🔗 Link Mode</button>
+  <div class="spacer"></div>
+  <span id="hint">Drag to pan · scroll to zoom · double-click canvas to add a term · L toggles link mode · Delete key removes selection</span>
+  <button id="save-btn">Save</button>
+  <button id="export-btn">Export JSON</button>
+  <button id="import-btn">Import JSON</button>
+  <input type="file" id="import-file" accept="application/json" style="display:none">
+  <button id="clear-btn" class="danger">Clear All</button>
+</div>
+
+<div id="viewport">
+  <div id="world">
+    <svg id="edge-layer"></svg>
+    <!-- node divs are appended here at runtime -->
+  </div>
+</div>
+
+<div id="inspector">
+  <div id="node-inspector">
+    <h3>Term</h3>
+    <label for="insp-label">Label</label>
+    <input type="text" id="insp-label" maxlength="60">
+
+    <label for="insp-color">Color (used if no image)</label>
+    <input type="color" id="insp-color">
+
+    <label for="insp-image">Image URL (optional, replaces circle)</label>
+    <input type="text" id="insp-image" placeholder="https://... or path to your own art">
+
+    <div class="row">
+      <button id="node-delete-btn" class="danger">Delete</button>
+    </div>
+  </div>
+
+  <div id="edge-inspector" style="display:none">
+    <h3>Connection</h3>
+    <label for="insp-edge-label">Relation label (optional)</label>
+    <input type="text" id="insp-edge-label" placeholder="e.g. synonym, opposite of...">
+
+    <div class="row">
+      <button id="edge-delete-btn" class="danger">Delete</button>
+    </div>
+  </div>
+</div>
+
+<div id="zoom-readout">100%</div>
+
+<div id="window-menu"></div>
+
+<script>
+/* ======================================================================
+   CUSTOMIZATION POINTS — CONFIG
+   These are the JS-side knobs an artist/programmer would tweak. Visual
+   styling mostly lives in the CSS variables above; this config controls
+   defaults and behavior.
+   ====================================================================== */
+const CONFIG = {
+  storageKey: 'termGraph.v1',
+  defaultNodeColor: '#45c4b0',   // matches --node-color; used when a new node is created
+  defaultNodeImage: '',          // set to a URL/path to give every new node a default sprite
+  clickDragThreshold: 5,         // px of movement before a pointerdown counts as a drag, not a click
+  zoomMin: 0.2,
+  zoomMax: 3,
+  zoomStep: 0.0015,              // wheel sensitivity
+};
+
+/* ======================================================================
+   DATA MODEL
+   graph.nodes: [{ id, label, x, y, color, image }]
+   graph.edges: [{ id, source, target, label }]
+   Coordinates are in "world" space (unaffected by pan/zoom).
+
+   This shape is intentionally simple so it can later be produced by a
+   dictionary-building tool instead of by hand: anything that generates
+   JSON matching this shape can be dropped in via Import.
+   ====================================================================== */
+let graph = { nodes: [], edges: [] };
+
+function makeId() {
+  return (crypto.randomUUID ? crypto.randomUUID() : 'id-' + Date.now() + '-' + Math.random().toString(16).slice(2));
+}
+
+function findNode(id) { return graph.nodes.find(n => n.id === id); }
+function findEdge(id) { return graph.edges.find(e => e.id === id); }
+function edgeBetween(aId, bId) {
+  return graph.edges.find(e =>
+    (e.source === aId && e.target === bId) ||
+    (e.source === bId && e.target === aId)
+  );
+}
+
+function addNode(label, x, y) {
+  const node = {
+    id: makeId(),
+    label: label,
+    x: x, y: y,
+    color: CONFIG.defaultNodeColor,
+    image: CONFIG.defaultNodeImage,
+  };
+  graph.nodes.push(node);
+  ensureVelocity(node.id);
+  renderNode(node);
+  save();
+  return node;
+}
+
+function addEdge(sourceId, targetId) {
+  if (sourceId === targetId) return null;
+  if (edgeBetween(sourceId, targetId)) return null;
+  const edge = { id: makeId(), source: sourceId, target: targetId, label: '' };
+  graph.edges.push(edge);
+  renderEdge(edge);
+  save();
+  return edge;
+}
+
+function removeNode(id) {
+  graph.nodes = graph.nodes.filter(n => n.id !== id);
+  velocities.delete(id);
+  const doomedEdges = graph.edges.filter(e => e.source === id || e.target === id);
+  doomedEdges.forEach(e => removeEdge(e.id, false));
+  const el = document.getElementById('node-' + id);
+  if (el) el.remove();
+  save();
+}
+
+function removeEdge(id, doSave = true) {
+  graph.edges = graph.edges.filter(e => e.id !== id);
+  const el = document.getElementById('edge-' + id);
+  if (el) el.remove();
+  if (doSave) save();
+}
+
+/* ======================================================================
+   PERSISTENCE
+   Auto-saves to localStorage on every change, so refreshing the page
+   doesn't lose work. Export/Import handle moving graphs as files, which
+   is also how the future dictionary-driven data will get loaded in.
+   ====================================================================== */
+function save() {
+  localStorage.setItem(CONFIG.storageKey, JSON.stringify(graph));
+}
+
+function load() {
+  const raw = localStorage.getItem(CONFIG.storageKey);
+  if (!raw) return false;
+  try {
+    const parsed = JSON.parse(raw);
+    if (parsed && Array.isArray(parsed.nodes) && Array.isArray(parsed.edges)) {
+      graph = parsed;
+      return true;
+    }
+  } catch (e) { console.warn('Failed to load saved graph', e); }
+  return false;
+}
+
+function exportJSON() {
+  const blob = new Blob([JSON.stringify(graph, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'term-graph.json';
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function importJSON(file) {
+  const reader = new FileReader();
+  reader.onload = () => {
+    try {
+      const parsed = JSON.parse(reader.result);
+      if (!parsed || !Array.isArray(parsed.nodes) || !Array.isArray(parsed.edges)) {
+        alert('That file doesn\'t look like a term graph (expected {nodes, edges}).');
+        return;
+      }
+      graph = parsed;
+      save();
+      fullRerender();
+    } catch (e) {
+      alert('Could not parse that file as JSON.');
+    }
+  };
+  reader.readAsText(file);
+}
+
+/* ======================================================================
+   RENDERING
+   ====================================================================== */
+const worldEl = document.getElementById('world');
+const edgeLayerEl = document.getElementById('edge-layer');
+const viewportEl = document.getElementById('viewport');
+
+function fullRerender() {
+  document.querySelectorAll('.node').forEach(el => el.remove());
+  edgeLayerEl.innerHTML = '';
+  velocities.clear();
+  graph.nodes.forEach(n => ensureVelocity(n.id));
+  graph.edges.forEach(renderEdge);
+  graph.nodes.forEach(renderNode);
+  clearSelection();
+}
+
+function renderNode(node) {
+  const el = document.createElement('div');
+  el.className = 'node';
+  el.id = 'node-' + node.id;
+  el.dataset.id = node.id;
+  positionNodeEl(el, node);
+  applyNodeVisual(el, node);
+
+  const label = document.createElement('div');
+  label.className = 'label';
+  label.textContent = node.label;
+  el.appendChild(label);
+
+  el.addEventListener('pointerdown', onNodePointerDown);
+  worldEl.appendChild(el);
+}
+
+function positionNodeEl(el, node) {
+  el.style.left = node.x + 'px';
+  el.style.top = node.y + 'px';
+}
+
+function applyNodeVisual(el, node) {
+  if (node.image) {
+    el.style.backgroundImage = `url("${node.image}")`;
+    el.dataset.hasImage = 'true';
+  } else {
+    el.style.backgroundImage = 'none';
+    el.style.backgroundColor = node.color || CONFIG.defaultNodeColor;
+    el.dataset.hasImage = 'false';
+  }
+  const label = el.querySelector('.label');
+  if (label) label.textContent = node.label;
+}
+
+function renderEdge(edge) {
+  const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+  g.setAttribute('class', 'edge');
+  g.setAttribute('id', 'edge-' + edge.id);
+  g.dataset.id = edge.id;
+
+  const hit = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+  hit.setAttribute('class', 'edge-hit');
+
+  const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+  line.setAttribute('class', 'edge-line');
+
+  const labelBg = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+  labelBg.setAttribute('class', 'edge-label-bg');
+  const label = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+  label.setAttribute('class', 'edge-label');
+
+  g.appendChild(hit);
+  g.appendChild(line);
+  g.appendChild(labelBg);
+  g.appendChild(label);
+  g.addEventListener('pointerdown', (e) => {
+    e.stopPropagation();
+    selectEdge(edge.id);
+  });
+
+  edgeLayerEl.appendChild(g);
+  updateEdgeGeometry(edge);
+}
+
+function updateEdgeGeometry(edge) {
+  const g = document.getElementById('edge-' + edge.id);
+  if (!g) return;
+  const a = findNode(edge.source);
+  const b = findNode(edge.target);
+  if (!a || !b) return;
+
+  const hit = g.querySelector('.edge-hit');
+  const line = g.querySelector('.edge-line');
+  [hit, line].forEach(l => {
+    l.setAttribute('x1', a.x); l.setAttribute('y1', a.y);
+    l.setAttribute('x2', b.x); l.setAttribute('y2', b.y);
+  });
+
+  const midX = (a.x + b.x) / 2;
+  const midY = (a.y + b.y) / 2;
+  const label = g.querySelector('.edge-label');
+  const labelBg = g.querySelector('.edge-label-bg');
+  if (edge.label) {
+    label.setAttribute('x', midX);
+    label.setAttribute('y', midY);
+    label.textContent = edge.label;
+    label.style.display = '';
+    // size the background rect to the rendered text
+    requestAnimationFrame(() => {
+      try {
+        const bbox = label.getBBox();
+        labelBg.setAttribute('x', bbox.x - 3);
+        labelBg.setAttribute('y', bbox.y - 1);
+        labelBg.setAttribute('width', bbox.width + 6);
+        labelBg.setAttribute('height', bbox.height + 2);
+        labelBg.style.display = '';
+      } catch (e) { /* ignore if not yet laid out */ }
+    });
+  } else {
+    label.style.display = 'none';
+    labelBg.style.display = 'none';
+  }
+}
+
+function updateEdgesForNode(nodeId) {
+  graph.edges.forEach(e => {
+    if (e.source === nodeId || e.target === nodeId) updateEdgeGeometry(e);
+  });
+}
+
+/* ======================================================================
+   PAN & ZOOM
+   ====================================================================== */
+const view = { panX: 0, panY: 0, scale: 1 };
+
+function applyViewTransform() {
+  worldEl.style.transform = `translate(${view.panX}px, ${view.panY}px) scale(${view.scale})`;
+  document.getElementById('zoom-readout').textContent = Math.round(view.scale * 100) + '%';
+}
+
+function screenToWorld(screenX, screenY) {
+  const rect = viewportEl.getBoundingClientRect();
+  return {
+    x: (screenX - rect.left - view.panX) / view.scale,
+    y: (screenY - rect.top - view.panY) / view.scale,
+  };
+}
+
+viewportEl.addEventListener('wheel', (e) => {
+  e.preventDefault();
+  const rect = viewportEl.getBoundingClientRect();
+  const mouseX = e.clientX - rect.left;
+  const mouseY = e.clientY - rect.top;
+  const worldBefore = {
+    x: (mouseX - view.panX) / view.scale,
+    y: (mouseY - view.panY) / view.scale,
+  };
+  const factor = Math.exp(-e.deltaY * CONFIG.zoomStep * 20);
+  view.scale = Math.min(CONFIG.zoomMax, Math.max(CONFIG.zoomMin, view.scale * factor));
+  view.panX = mouseX - worldBefore.x * view.scale;
+  view.panY = mouseY - worldBefore.y * view.scale;
+  applyViewTransform();
+}, { passive: false });
+
+let panState = null;
+viewportEl.addEventListener('pointerdown', (e) => {
+  if (e.target !== viewportEl && e.target !== worldEl && e.target !== edgeLayerEl) return;
+  panState = { startX: e.clientX, startY: e.clientY, panX0: view.panX, panY0: view.panY };
+  viewportEl.classList.add('panning');
+  try { viewportEl.setPointerCapture(e.pointerId); } catch (err) { /* capture is a nicety; pan still works without it */ }
+  clearSelection();
+});
+viewportEl.addEventListener('pointermove', (e) => {
+  if (!panState) return;
+  view.panX = panState.panX0 + (e.clientX - panState.startX);
+  view.panY = panState.panY0 + (e.clientY - panState.startY);
+  applyViewTransform();
+});
+viewportEl.addEventListener('pointerup', (e) => {
+  if (panState) {
+    viewportEl.classList.remove('panning');
+    panState = null;
+  }
+});
+
+/* ======================================================================
+   WINDOWS (background switcher)
+   Three "windows" are really just three background presets applied to the
+   same shared graph — only one is shown at a time. Right-click anywhere to
+   pick a different one. Add more entries here to offer more choices; each
+   just needs a name plus the CSS variable values to apply.
+   ====================================================================== */
+const WINDOWS = [
+  { name: 'Blush',    bg: '#f7dbe2', grid: 'rgba(150, 60, 90, 0.07)' },
+  { name: 'Midnight', bg: '#12141a', grid: 'rgba(255, 255, 255, 0.06)' },
+  { name: 'Meadow',   bg: '#e3f0df', grid: 'rgba(50, 110, 60, 0.07)' },
+];
+const WINDOW_STORAGE_KEY = 'termGraph.window';
+let currentWindowIndex = 0;
+
+function applyWindow(index) {
+  currentWindowIndex = index;
+  const w = WINDOWS[index];
+  document.documentElement.style.setProperty('--bg-color', w.bg);
+  document.documentElement.style.setProperty('--grid-color', w.grid);
+  localStorage.setItem(WINDOW_STORAGE_KEY, String(index));
+}
+
+function loadWindow() {
+  const saved = parseInt(localStorage.getItem(WINDOW_STORAGE_KEY), 10);
+  applyWindow(Number.isInteger(saved) && WINDOWS[saved] ? saved : 0);
+}
+
+const windowMenuEl = document.getElementById('window-menu');
+
+function openWindowMenu(clientX, clientY) {
+  windowMenuEl.innerHTML = WINDOWS.map((w, i) => `
+    <div class="window-menu-item${i === currentWindowIndex ? ' current' : ''}" data-index="${i}">
+      <span class="swatch" style="background:${w.bg}"></span>${w.name}
+    </div>
+  `).join('');
+  windowMenuEl.classList.add('visible');
+  // Position after adding content so its real size is known, then keep it on-screen.
+  const menuRect = windowMenuEl.getBoundingClientRect();
+  const x = Math.min(clientX, window.innerWidth - menuRect.width - 8);
+  const y = Math.min(clientY, window.innerHeight - menuRect.height - 8);
+  windowMenuEl.style.left = x + 'px';
+  windowMenuEl.style.top = y + 'px';
+}
+
+function closeWindowMenu() {
+  windowMenuEl.classList.remove('visible');
+}
+
+document.addEventListener('contextmenu', (e) => {
+  const tag = e.target.tagName;
+  if (tag === 'INPUT' || tag === 'TEXTAREA') return; // let text fields keep their native copy/paste menu
+  e.preventDefault();
+  openWindowMenu(e.clientX, e.clientY);
+});
+
+windowMenuEl.addEventListener('click', (e) => {
+  const item = e.target.closest('.window-menu-item');
+  if (!item) return;
+  applyWindow(parseInt(item.dataset.index, 10));
+  closeWindowMenu();
+});
+
+document.addEventListener('pointerdown', (e) => {
+  if (windowMenuEl.classList.contains('visible') && !windowMenuEl.contains(e.target)) {
+    closeWindowMenu();
+  }
+});
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') closeWindowMenu();
+});
+
+/* ======================================================================
+   NODE DRAG / SELECT / LINK
+   ====================================================================== */
+let linkMode = false;
+let pendingLinkNodeId = null;
+let selectedNodeId = null;
+let selectedEdgeId = null;
+let dragState = null;
+
+const linkModeBtn = document.getElementById('link-mode-btn');
+linkModeBtn.addEventListener('click', () => {
+  linkMode = !linkMode;
+  linkModeBtn.classList.toggle('active', linkMode);
+  setPendingLink(null);
+});
+
+function setPendingLink(nodeId) {
+  if (pendingLinkNodeId) {
+    const prevEl = document.getElementById('node-' + pendingLinkNodeId);
+    if (prevEl) prevEl.classList.remove('pending-link');
+  }
+  pendingLinkNodeId = nodeId;
+  if (nodeId) {
+    const el = document.getElementById('node-' + nodeId);
+    if (el) el.classList.add('pending-link');
+  }
+}
+
+function onNodePointerDown(e) {
+  e.stopPropagation();
+  const nodeEl = e.currentTarget; // captured now: e.currentTarget is null once this event finishes dispatching
+  const nodeId = nodeEl.dataset.id;
+  const node = findNode(nodeId);
+  if (!node) return;
+
+  dragState = {
+    id: nodeId,
+    startClientX: e.clientX,
+    startClientY: e.clientY,
+    startNodeX: node.x,
+    startNodeY: node.y,
+    moved: false,
+  };
+  try { nodeEl.setPointerCapture(e.pointerId); } catch (err) { /* capture is a nicety; drag still works without it */ }
+  nodeEl.classList.add('dragging');
+
+  const onMove = (ev) => {
+    const dxScreen = ev.clientX - dragState.startClientX;
+    const dyScreen = ev.clientY - dragState.startClientY;
+    if (!dragState.moved && Math.hypot(dxScreen, dyScreen) > CONFIG.clickDragThreshold) {
+      dragState.moved = true;
+    }
+    if (dragState.moved) {
+      node.x = dragState.startNodeX + dxScreen / view.scale;
+      node.y = dragState.startNodeY + dyScreen / view.scale;
+      positionNodeEl(nodeEl, node);
+      updateEdgesForNode(nodeId);
+    }
+  };
+
+  const onUp = (ev) => {
+    nodeEl.classList.remove('dragging');
+    // Capture can already be gone by the time this runs (implicitly released by the
+    // browser, or never established), so this must not throw and skip the cleanup below.
+    if (nodeEl.hasPointerCapture(ev.pointerId)) {
+      nodeEl.releasePointerCapture(ev.pointerId);
+    }
+    nodeEl.removeEventListener('pointermove', onMove);
+    nodeEl.removeEventListener('pointerup', onUp);
+
+    if (dragState.moved) {
+      save();
+    } else {
+      handleNodeClick(nodeId);
+    }
+    dragState = null;
+  };
+
+  nodeEl.addEventListener('pointermove', onMove);
+  nodeEl.addEventListener('pointerup', onUp);
+}
+
+function handleNodeClick(nodeId) {
+  if (linkMode) {
+    if (!pendingLinkNodeId) {
+      setPendingLink(nodeId);
+    } else if (pendingLinkNodeId === nodeId) {
+      setPendingLink(null);
+    } else {
+      addEdge(pendingLinkNodeId, nodeId);
+      setPendingLink(null);
+    }
+    return;
+  }
+  selectNode(nodeId);
+}
+
+/* ======================================================================
+   PHYSICS
+   Nodes gently repel each other, connected nodes are pulled toward a rest
+   distance along their edge (like a spring), and everything drifts softly
+   toward the origin so the graph doesn't wander off. Velocities are kept
+   separately from the saved graph data — they're just presentation state.
+   Tune these numbers to change how "blobby" the motion feels.
+   ====================================================================== */
+const PHYSICS = {
+  repulsion: 26000,
+  minDistance: 40,
+  springLength: 170,
+  springStrength: 0.02,
+  centerPull: 0.0006,
+  damping: 0.9,
+  maxSpeed: 22,
+};
+
+const velocities = new Map(); // node id -> { vx, vy }
+function ensureVelocity(id) {
+  if (!velocities.has(id)) velocities.set(id, { vx: 0, vy: 0 });
+  return velocities.get(id);
+}
+
+function physicsTick() {
+  const nodes = graph.nodes;
+  const forces = new Map();
+  nodes.forEach(n => forces.set(n.id, { fx: 0, fy: 0 }));
+
+  for (let i = 0; i < nodes.length; i++) {
+    for (let j = i + 1; j < nodes.length; j++) {
+      const a = nodes[i], b = nodes[j];
+      const dx = a.x - b.x, dy = a.y - b.y;
+      let dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist < PHYSICS.minDistance) dist = PHYSICS.minDistance;
+      const force = PHYSICS.repulsion / (dist * dist);
+      const fx = (dx / dist) * force, fy = (dy / dist) * force;
+      const fa = forces.get(a.id), fb = forces.get(b.id);
+      fa.fx += fx; fa.fy += fy;
+      fb.fx -= fx; fb.fy -= fy;
+    }
+  }
+
+  graph.edges.forEach(edge => {
+    const a = findNode(edge.source), b = findNode(edge.target);
+    if (!a || !b) return;
+    const dx = b.x - a.x, dy = b.y - a.y;
+    const dist = Math.sqrt(dx * dx + dy * dy) || 0.01;
+    const force = (dist - PHYSICS.springLength) * PHYSICS.springStrength;
+    const fx = (dx / dist) * force, fy = (dy / dist) * force;
+    const fa = forces.get(a.id), fb = forces.get(b.id);
+    fa.fx += fx; fa.fy += fy;
+    fb.fx -= fx; fb.fy -= fy;
+  });
+
+  nodes.forEach(n => {
+    const v = ensureVelocity(n.id);
+    if (dragState && dragState.id === n.id) {
+      // pointer owns this node's position while it's being dragged
+      v.vx = 0; v.vy = 0;
+      return;
+    }
+    const f = forces.get(n.id);
+    f.fx += -n.x * PHYSICS.centerPull;
+    f.fy += -n.y * PHYSICS.centerPull;
+
+    v.vx = (v.vx + f.fx) * PHYSICS.damping;
+    v.vy = (v.vy + f.fy) * PHYSICS.damping;
+    const speed = Math.hypot(v.vx, v.vy);
+    if (speed > PHYSICS.maxSpeed) {
+      v.vx = (v.vx / speed) * PHYSICS.maxSpeed;
+      v.vy = (v.vy / speed) * PHYSICS.maxSpeed;
+    }
+    n.x += v.vx;
+    n.y += v.vy;
+  });
+}
+
+function physicsLoop() {
+  physicsTick();
+  graph.nodes.forEach(n => {
+    const el = document.getElementById('node-' + n.id);
+    if (el) positionNodeEl(el, n);
+  });
+  graph.edges.forEach(updateEdgeGeometry);
+  requestAnimationFrame(physicsLoop);
+}
+
+/* ======================================================================
+   SELECTION / INSPECTOR
+   ====================================================================== */
+const inspectorEl = document.getElementById('inspector');
+const nodeInspector = document.getElementById('node-inspector');
+const edgeInspector = document.getElementById('edge-inspector');
+
+function clearSelection() {
+  if (selectedNodeId) {
+    const el = document.getElementById('node-' + selectedNodeId);
+    if (el) el.classList.remove('selected');
+  }
+  if (selectedEdgeId) {
+    const el = document.getElementById('edge-' + selectedEdgeId);
+    if (el) el.classList.remove('selected');
+  }
+  selectedNodeId = null;
+  selectedEdgeId = null;
+  inspectorEl.classList.remove('visible');
+}
+
+function selectNode(nodeId) {
+  clearSelection();
+  const node = findNode(nodeId);
+  if (!node) return;
+  selectedNodeId = nodeId;
+  document.getElementById('node-' + nodeId).classList.add('selected');
+
+  nodeInspector.style.display = '';
+  edgeInspector.style.display = 'none';
+  document.getElementById('insp-label').value = node.label;
+  document.getElementById('insp-color').value = node.color || CONFIG.defaultNodeColor;
+  document.getElementById('insp-image').value = node.image || '';
+  inspectorEl.classList.add('visible');
+}
+
+function selectEdge(edgeId) {
+  clearSelection();
+  const edge = findEdge(edgeId);
+  if (!edge) return;
+  selectedEdgeId = edgeId;
+  document.getElementById('edge-' + edgeId).classList.add('selected');
+
+  nodeInspector.style.display = 'none';
+  edgeInspector.style.display = '';
+  document.getElementById('insp-edge-label').value = edge.label || '';
+  inspectorEl.classList.add('visible');
+}
+
+document.getElementById('insp-label').addEventListener('input', (e) => {
+  const node = findNode(selectedNodeId);
+  if (!node) return;
+  node.label = e.target.value;
+  applyNodeVisual(document.getElementById('node-' + node.id), node);
+  save();
+});
+document.getElementById('insp-color').addEventListener('input', (e) => {
+  const node = findNode(selectedNodeId);
+  if (!node) return;
+  node.color = e.target.value;
+  applyNodeVisual(document.getElementById('node-' + node.id), node);
+  save();
+});
+document.getElementById('insp-image').addEventListener('input', (e) => {
+  const node = findNode(selectedNodeId);
+  if (!node) return;
+  node.image = e.target.value.trim();
+  applyNodeVisual(document.getElementById('node-' + node.id), node);
+  save();
+});
+document.getElementById('node-delete-btn').addEventListener('click', () => {
+  if (!selectedNodeId) return;
+  removeNode(selectedNodeId);
+  clearSelection();
+});
+
+document.getElementById('insp-edge-label').addEventListener('input', (e) => {
+  const edge = findEdge(selectedEdgeId);
+  if (!edge) return;
+  edge.label = e.target.value;
+  updateEdgeGeometry(edge);
+  save();
+});
+document.getElementById('edge-delete-btn').addEventListener('click', () => {
+  if (!selectedEdgeId) return;
+  removeEdge(selectedEdgeId);
+  clearSelection();
+});
+
+document.addEventListener('keydown', (e) => {
+  const tag = document.activeElement.tagName;
+  const typing = tag === 'INPUT' || tag === 'TEXTAREA';
+  if (typing) return;
+
+  if (e.key === 'Delete' || e.key === 'Backspace') {
+    if (selectedNodeId) { removeNode(selectedNodeId); clearSelection(); }
+    else if (selectedEdgeId) { removeEdge(selectedEdgeId); clearSelection(); }
+  } else if (e.key === 'Escape') {
+    setPendingLink(null);
+    clearSelection();
+  } else if (e.key === 'l' || e.key === 'L') {
+    linkModeBtn.click(); // buttons are hidden right now, but the toggle logic still lives on the button's own handler
+  }
+});
+
+/* ======================================================================
+   TOOLBAR ACTIONS
+   ====================================================================== */
+const termInput = document.getElementById('term-input');
+
+function addTermFromInput() {
+  const text = termInput.value.trim();
+  if (!text) return;
+  const rect = viewportEl.getBoundingClientRect();
+  const center = screenToWorld(rect.left + rect.width / 2, rect.top + rect.height / 2);
+  const jitter = () => (Math.random() - 0.5) * 60;
+  addNode(text, center.x + jitter(), center.y + jitter());
+  termInput.value = '';
+  termInput.focus();
+}
+
+document.getElementById('add-btn').addEventListener('click', addTermFromInput);
+termInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') addTermFromInput();
+});
+
+document.getElementById('save-btn').addEventListener('click', () => {
+  save();
+  const btn = document.getElementById('save-btn');
+  const original = btn.textContent;
+  btn.textContent = 'Saved ✓';
+  setTimeout(() => { btn.textContent = original; }, 900);
+});
+
+document.getElementById('export-btn').addEventListener('click', exportJSON);
+
+const importFileInput = document.getElementById('import-file');
+document.getElementById('import-btn').addEventListener('click', () => importFileInput.click());
+importFileInput.addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  if (file) importJSON(file);
+  importFileInput.value = '';
+});
+
+document.getElementById('clear-btn').addEventListener('click', () => {
+  if (!confirm('Delete all terms and connections? This cannot be undone (unless you exported a backup).')) return;
+  graph = { nodes: [], edges: [] };
+  save();
+  fullRerender();
+});
+
+/* Double-click empty canvas to drop a new node right there. */
+viewportEl.addEventListener('dblclick', (e) => {
+  if (e.target !== viewportEl && e.target !== worldEl && e.target !== edgeLayerEl) return;
+  const text = prompt('New term:');
+  if (!text || !text.trim()) return;
+  const world = screenToWorld(e.clientX, e.clientY);
+  addNode(text.trim(), world.x, world.y);
+});
+
+/* ======================================================================
+   INIT
+   ====================================================================== */
+function seedIfEmpty() {
+  if (graph.nodes.length > 0) return;
+  const a = addNode('algebra', -80, -40);
+  const b = addNode('equation', 90, -60);
+  const c = addNode('variable', 10, 90);
+  addEdge(a.id, b.id);
+  addEdge(a.id, c.id);
+  addEdge(b.id, c.id);
+}
+
+function centerViewOnOrigin() {
+  // Uses window size rather than viewportEl.getBoundingClientRect() because on a cold
+  // page load this can run before layout has been computed, which would read back 0x0.
+  const toolbarHeight = document.getElementById('toolbar').offsetHeight || 56;
+  view.panX = window.innerWidth / 2;
+  view.panY = (window.innerHeight - toolbarHeight) / 2;
+  applyViewTransform();
+}
+
+function init() {
+  loadWindow();
+  const hadSavedGraph = load();
+  centerViewOnOrigin();
+  fullRerender();
+  if (!hadSavedGraph) seedIfEmpty();
+  requestAnimationFrame(physicsLoop);
+}
+
+init();
+</script>
+</body>
+</html>

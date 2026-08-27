@@ -246,8 +246,8 @@ button.danger:hover { background: #7a2a2a; }
 }
 #inspector .row button { flex: 1; }
 
-/* ---------- Window-switcher context menu ---------- */
-#window-menu {
+/* ---------- Context menus (window switcher + per-node actions) ---------- */
+.context-menu {
   position: fixed;
   min-width: 160px;
   background: var(--panel-bg);
@@ -258,8 +258,8 @@ button.danger:hover { background: #7a2a2a; }
   display: none;
   box-shadow: 0 8px 24px rgba(0,0,0,0.35);
 }
-#window-menu.visible { display: block; }
-#window-menu .window-menu-item {
+.context-menu.visible { display: block; }
+.context-menu .context-menu-item {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -268,10 +268,12 @@ button.danger:hover { background: #7a2a2a; }
   cursor: pointer;
   font-size: 13px;
   color: var(--panel-text);
+  white-space: nowrap;
 }
-#window-menu .window-menu-item:hover { background: #262b3a; }
-#window-menu .window-menu-item.current { background: #262b3a; font-weight: 600; }
-#window-menu .swatch {
+.context-menu .context-menu-item:hover { background: #262b3a; }
+.context-menu .context-menu-item.current { background: #262b3a; font-weight: 600; }
+.context-menu .context-menu-item.danger:hover { background: #7a2a2a; }
+.context-menu .swatch {
   width: 14px;
   height: 14px;
   border-radius: 50%;
@@ -300,7 +302,7 @@ button.danger:hover { background: #7a2a2a; }
   <button id="add-btn">+ Add Term</button>
   <button id="link-mode-btn" title="Toggle link mode, then click two nodes to connect them">🔗 Link Mode</button>
   <div class="spacer"></div>
-  <span id="hint">Drag to pan · scroll to zoom · double-click canvas to add a term · L toggles link mode · Delete key removes selection</span>
+  <span id="hint">Drag to pan · scroll to zoom · double-click canvas to add a term · click a node for options · right-click canvas to change background</span>
   <button id="save-btn">Save</button>
   <button id="export-btn">Export JSON</button>
   <button id="import-btn">Import JSON</button>
@@ -345,7 +347,8 @@ button.danger:hover { background: #7a2a2a; }
 
 <div id="zoom-readout">100%</div>
 
-<div id="window-menu"></div>
+<div id="window-menu" class="context-menu"></div>
+<div id="node-menu" class="context-menu"></div>
 
 <script>
 /* ======================================================================
@@ -647,6 +650,7 @@ viewportEl.addEventListener('wheel', (e) => {
 
 let panState = null;
 viewportEl.addEventListener('pointerdown', (e) => {
+  if (e.button !== 0) return; // right/middle click should reach the contextmenu handler, not start a pan
   if (e.target !== viewportEl && e.target !== worldEl && e.target !== edgeLayerEl) return;
   panState = { startX: e.clientX, startY: e.clientY, panX0: view.panX, panY0: view.panY };
   viewportEl.classList.add('panning');
@@ -696,19 +700,29 @@ function loadWindow() {
 
 const windowMenuEl = document.getElementById('window-menu');
 
+// Shared by every context menu (window switcher, per-node actions): position
+// it near the click without letting it run off the edge of the screen.
+function positionMenu(menuEl, clientX, clientY) {
+  const menuRect = menuEl.getBoundingClientRect();
+  const x = Math.min(clientX, window.innerWidth - menuRect.width - 8);
+  const y = Math.min(clientY, window.innerHeight - menuRect.height - 8);
+  menuEl.style.left = x + 'px';
+  menuEl.style.top = y + 'px';
+}
+
+function closeAllContextMenus() {
+  document.querySelectorAll('.context-menu.visible').forEach(el => el.classList.remove('visible'));
+}
+
 function openWindowMenu(clientX, clientY) {
+  closeAllContextMenus();
   windowMenuEl.innerHTML = WINDOWS.map((w, i) => `
-    <div class="window-menu-item${i === currentWindowIndex ? ' current' : ''}" data-index="${i}">
+    <div class="context-menu-item${i === currentWindowIndex ? ' current' : ''}" data-index="${i}">
       <span class="swatch" style="background:${w.bg}"></span>${w.name}
     </div>
   `).join('');
   windowMenuEl.classList.add('visible');
-  // Position after adding content so its real size is known, then keep it on-screen.
-  const menuRect = windowMenuEl.getBoundingClientRect();
-  const x = Math.min(clientX, window.innerWidth - menuRect.width - 8);
-  const y = Math.min(clientY, window.innerHeight - menuRect.height - 8);
-  windowMenuEl.style.left = x + 'px';
-  windowMenuEl.style.top = y + 'px';
+  positionMenu(windowMenuEl, clientX, clientY);
 }
 
 function closeWindowMenu() {
@@ -723,19 +737,19 @@ document.addEventListener('contextmenu', (e) => {
 });
 
 windowMenuEl.addEventListener('click', (e) => {
-  const item = e.target.closest('.window-menu-item');
+  const item = e.target.closest('.context-menu-item');
   if (!item) return;
   applyWindow(parseInt(item.dataset.index, 10));
   closeWindowMenu();
 });
 
 document.addEventListener('pointerdown', (e) => {
-  if (windowMenuEl.classList.contains('visible') && !windowMenuEl.contains(e.target)) {
-    closeWindowMenu();
-  }
+  document.querySelectorAll('.context-menu.visible').forEach(menuEl => {
+    if (!menuEl.contains(e.target)) menuEl.classList.remove('visible');
+  });
 });
 document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape') closeWindowMenu();
+  if (e.key === 'Escape') closeAllContextMenus();
 });
 
 /* ======================================================================
@@ -767,6 +781,7 @@ function setPendingLink(nodeId) {
 }
 
 function onNodePointerDown(e) {
+  if (e.button !== 0) return; // right/middle click should reach the contextmenu handler, not drag/select the node
   e.stopPropagation();
   const nodeEl = e.currentTarget; // captured now: e.currentTarget is null once this event finishes dispatching
   const nodeId = nodeEl.dataset.id;
@@ -811,7 +826,7 @@ function onNodePointerDown(e) {
     if (dragState.moved) {
       save();
     } else {
-      handleNodeClick(nodeId);
+      handleNodeClick(nodeId, ev.clientX, ev.clientY);
     }
     dragState = null;
   };
@@ -820,7 +835,7 @@ function onNodePointerDown(e) {
   nodeEl.addEventListener('pointerup', onUp);
 }
 
-function handleNodeClick(nodeId) {
+function handleNodeClick(nodeId, clientX, clientY) {
   if (linkMode) {
     if (!pendingLinkNodeId) {
       setPendingLink(nodeId);
@@ -832,8 +847,49 @@ function handleNodeClick(nodeId) {
     }
     return;
   }
-  selectNode(nodeId);
+  openNodeMenu(nodeId, clientX, clientY);
 }
+
+function escapeHtml(str) {
+  return str.replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
+}
+
+const nodeMenuEl = document.getElementById('node-menu');
+
+function openNodeMenu(nodeId, clientX, clientY) {
+  const node = findNode(nodeId);
+  if (!node) return;
+  closeAllContextMenus();
+  nodeMenuEl.dataset.nodeId = nodeId;
+  nodeMenuEl.innerHTML = `
+    <div class="context-menu-item" data-action="edit">Edit "${escapeHtml(node.label)}"</div>
+    <div class="context-menu-item" data-action="link">Link from here</div>
+    <div class="context-menu-item danger" data-action="delete">Delete</div>
+  `;
+  nodeMenuEl.classList.add('visible');
+  positionMenu(nodeMenuEl, clientX, clientY);
+}
+
+nodeMenuEl.addEventListener('click', (e) => {
+  const item = e.target.closest('.context-menu-item');
+  if (!item) return;
+  const nodeId = nodeMenuEl.dataset.nodeId;
+  const action = item.dataset.action;
+  nodeMenuEl.classList.remove('visible');
+
+  if (action === 'edit') {
+    selectNode(nodeId);
+  } else if (action === 'link') {
+    if (!linkMode) {
+      linkMode = true;
+      linkModeBtn.classList.add('active');
+    }
+    setPendingLink(nodeId);
+  } else if (action === 'delete') {
+    if (selectedNodeId === nodeId) clearSelection();
+    removeNode(nodeId);
+  }
+});
 
 /* ======================================================================
    PHYSICS

@@ -23,6 +23,7 @@
   const GAP = 12;            // minimum air between blobs
   const FRICTION = 0.935;    // per frame; lower = stops sooner
   const BOUNCE = 0.55;
+  const STRING_K = 0.018;    // pull of a connection once it is stretched past its rest length
 
   const $ = (s) => document.querySelector(s);
   const stage = $("#stage"), board = $("#board"), svg = $("#edges"), blobsEl = $("#blobs"), menuEl = $("#menu");
@@ -40,6 +41,7 @@
   let W = 1000, H = 700, SC = 1;
   const view = { s: 1, x: 0, y: 0 };  // on-screen transform of the board
   const P = {};      // live positions for the current map: id -> {x, y, vx, vy, r}
+  const REST = {};   // edge id -> rest length; connections act like strings (pull when taut, slack when short)
   let drag = null, press = null, connect = null, stack = [];
   let simOn = false;
 
@@ -92,6 +94,7 @@
   }
   function placeFromData() {
     for (const k of Object.keys(P)) delete P[k];
+    for (const k of Object.keys(REST)) delete REST[k];
     for (const b of map().blobs) {
       const p = { x: toX(b.u), y: toY(b.v), vx: 0, vy: 0, r: b.s / 2 };
       const bd = bounds(p);
@@ -207,10 +210,20 @@
         const sa = aFixed ? 0 : bFixed ? 1 : 0.5, sb = bFixed ? 0 : aFixed ? 1 : 0.5;
         a.x -= nx * push * sa * 0.5; a.y -= ny * push * sa * 0.5;
         b.x += nx * push * sb * 0.5; b.y += ny * push * sb * 0.5;
-        a.vx -= nx * push * sa * 0.08; a.vy -= ny * push * sa * 0.08;
-        b.vx += nx * push * sb * 0.08; b.vy += ny * push * sb * 0.08;
         if (push > 0.5) active = true;
       }
+    }
+    for (const e of map().edges) {
+      const a = P[e.from], b = P[e.to];
+      if (!a || !b) continue;
+      const dx = b.x - a.x, dy = b.y - a.y, d = Math.hypot(dx, dy) || 1;
+      if (REST[e.id] == null) REST[e.id] = clamp(d, a.r + b.r + 40, 340);
+      const stretch = d - REST[e.id];
+      if (stretch <= 0) continue;             // slack string: no force
+      const f = stretch * STRING_K, nx = dx / d, ny = dy / d;
+      const aFixed = drag && drag.id === e.from, bFixed = drag && drag.id === e.to;
+      if (!aFixed) { a.vx += nx * f; a.vy += ny * f; }
+      if (!bFixed) { b.vx -= nx * f; b.vy -= ny * f; }
     }
     for (const id of ids) {
       const p = P[id];

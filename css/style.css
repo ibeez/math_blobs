@@ -32,6 +32,8 @@ button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 2.5
 }
 .blob.dragging { cursor: grabbing; box-shadow: 0 10px 22px rgba(43, 58, 85, .25); z-index: 3; }
 .blob.selected { box-shadow: 0 0 0 5px rgba(43, 58, 85, .25); }
+.blob.holding { box-shadow: 0 0 0 9px rgba(43, 58, 85, .16); transition: box-shadow .5s ease-in; }
+.blob { -webkit-touch-callout: none; }
 .blob.target { box-shadow: 0 0 0 9px rgba(43, 58, 85, .10); }
 .blob.target:hover { box-shadow: 0 0 0 9px rgba(43, 58, 85, .22); }
 .blob.wiggle { animation: wiggle .4s ease-out; }

@@ -262,9 +262,11 @@
     }
     const w = toWorld(e), p = P[id];
     press = { id, el, sx: e.clientX, sy: e.clientY, ox: w.x - p.x, oy: w.y - p.y, moved: false, long: false, samples: [] };
-    if (e.pointerType !== "mouse") {
-      press.timer = setTimeout(() => { if (press && !press.moved) { press.long = true; openConnect(id); } }, 520);
-    }
+    // hold still on a blob to open the connect menu (mouse, touch or pen)
+    el.classList.add("holding");
+    press.timer = setTimeout(() => {
+      if (press && !press.moved) { press.long = true; el.classList.remove("holding"); openConnect(id); }
+    }, 500);
     el.setPointerCapture(e.pointerId);
   });
 
@@ -273,7 +275,7 @@
     if (!press) return;
     if (!press.moved && Math.hypot(e.clientX - press.sx, e.clientY - press.sy) < 5) return;
     if (!press.moved) {
-      press.moved = true; clearTimeout(press.timer);
+      press.moved = true; clearTimeout(press.timer); press.el.classList.remove("holding");
       if (connect) closeConnect();
       drag = { id: press.id };
       press.el.classList.add("dragging");
@@ -297,6 +299,7 @@
     if (!press) return;
     const pr = press; press = null;
     clearTimeout(pr.timer);
+    pr.el.classList.remove("holding");
     if (pr.moved) {
       pr.el.classList.remove("dragging");
       const s = pr.samples, p = P[pr.id];
@@ -318,7 +321,7 @@
   stage.addEventListener("contextmenu", (e) => {
     e.preventDefault();
     const el = e.target.closest(".blob");
-    if (el) openConnect(el.dataset.id); else if (connect) closeConnect();
+    if (!el && connect) closeConnect();
   });
 
   blobsEl.addEventListener("keydown", (e) => {
@@ -473,7 +476,7 @@
     if (b) {
       const es = m.edges.filter((e) => e.from === id || e.to === id);
       h += `<div class="p-label">${es.length} CONNECTION${es.length === 1 ? "" : "S"}</div><div class="conns">`;
-      if (!es.length) h += `<div class="p-empty">Right-click the blob, or use “connect…”, to link it to another term.</div>`;
+      if (!es.length) h += `<div class="p-empty">Press and hold the blob, or use “connect…”, to link it to another term.</div>`;
       for (const e of es) {
         const ty = TYPES[e.type], out = e.from === id, other = out ? e.to : e.from;
         const swatch = ty.dash

@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>mathblobs — demo</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700&display=swap" rel="stylesheet">
+<style>html,body{margin:0;height:100%;background:#FBF3E4}a{color:#2B3A55}a:hover{color:#3E8E8A}</style>
+<script>window.OM_SCENES = '[{"name":"Opening","dur":3,"desc":"Limit, Function and Slope pop onto an empty canvas"},{"name":"Add","dur":6,"desc":"Type Derivative, press +, pick a colour, the blob lands"},{"name":"Connect","dur":6,"desc":"Hold Derivative, the ring opens, drag requires onto Limit"},{"name":"Links","dur":4,"desc":"Three more link types draw in with labels"},{"name":"Terms","dur":6,"desc":"Open Derivative, click the underlined limit, its card slides in"},{"name":"Prereqs","dur":3,"desc":"Click the Precalculus chip and the map switches"},{"name":"Logo","dur":3.5,"desc":"Mathblobs logo and Start mapping, then fade to the opening"}]';
+window.OM_PLAYBACK = '{"mode":"loop"}';</script>
+</helmet>
+<div style="position:fixed;inset:0;background:#FBF3E4">
+<x-import component-from-global-scope="MathblobsIntro" from="./animations-v3.jsx ./mathblobs-intro.jsx" hint-size="100%,100%" style="position:absolute;inset:0"></x-import>
+</div>
+</x-dc>
+</body>
+</html>

@@ -281,6 +281,12 @@
   window.addEventListener("pointermove", (e) => {
     if (connect && connect.type) { connect.cursor = toWorld(e); draw(); }
     if (!press) return;
+    if (press.long) {   // still holding after the menu opened: slide onto a type, then on to a target
+      const under = document.elementFromPoint(e.clientX, e.clientY);
+      const puck = under && under.closest(".puck");
+      if (puck) chooseType(puck.dataset.type, e);
+      return;
+    }
     if (!press.moved && Math.hypot(e.clientX - press.sx, e.clientY - press.sy) < 5) return;
     if (!press.moved) {
       press.moved = true; clearTimeout(press.timer); press.el.classList.remove("holding");
@@ -302,7 +308,11 @@
       connect.dragging = false;
       const t = document.elementFromPoint(e.clientX, e.clientY);
       const el = t && t.closest(".blob");
-      if (el && el.dataset.id !== connect.from) { finishConnect(el.dataset.id); return; }
+      if (el && el.dataset.id !== connect.from) {
+        if (press) { clearTimeout(press.timer); press.el.classList.remove("holding"); press = null; }
+        finishConnect(el.dataset.id);
+        return;
+      }
     }
     if (!press) return;
     const pr = press; press = null;
@@ -354,16 +364,22 @@
       b.addEventListener("pointerdown", (e) => {
         if (e.button !== 0) return;
         e.stopPropagation(); e.preventDefault();
-        connect.type = k;
-        connect.dragging = true;
-        connect.cursor = toWorld(e);
-        for (const o of menuEl.children) o.style.boxShadow = o === b ? `0 0 0 3px ${t.c}` : "";
-        for (const el of blobsEl.querySelectorAll(".blob")) el.classList.toggle("target", el.dataset.id !== id);
-        draw();
+        chooseType(k, e);
       });
       menuEl.appendChild(b);
     });
     placeMenu();
+  }
+  // Pick a connection type; the line then follows the pointer to a target blob.
+  function chooseType(k, e) {
+    if (!connect || connect.type === k) return;
+    const t = TYPES[k];
+    connect.type = k;
+    connect.dragging = true;
+    connect.cursor = toWorld(e);
+    for (const o of menuEl.children) o.style.boxShadow = o.dataset.type === k ? `0 0 0 3px ${t.c}` : "";
+    for (const el of blobsEl.querySelectorAll(".blob")) el.classList.toggle("target", el.dataset.id !== connect.from);
+    draw();
   }
   function placeMenu() {
     if (!connect) return;

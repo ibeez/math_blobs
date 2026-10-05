@@ -23,7 +23,10 @@
   const GAP = 12;            // minimum air between blobs
   const FRICTION = 0.935;    // per frame; lower = stops sooner
   const BOUNCE = 0.55;
-  const STRING_K = 0.018;    // pull of a connection once it is stretched past its rest length
+  const STRING_K = 0.018;    // pull of a connection stretched past its rest length
+  const PUSH_K = 0.012;      // push of a connection squeezed shorter than its rest length
+  const ROOM = 60;           // blobs closer than this (edge to edge) gently nudge each other apart
+  const ROOM_K = 0.03;
 
   const $ = (s) => document.querySelector(s);
   const stage = $("#stage"), board = $("#board"), svg = $("#edges"), blobsEl = $("#blobs"), menuEl = $("#menu");
@@ -41,7 +44,7 @@
   let W = 1000, H = 700, SC = 1;
   const view = { s: 1, x: 0, y: 0 };  // on-screen transform of the board
   const P = {};      // live positions for the current map: id -> {x, y, vx, vy, r}
-  const REST = {};   // edge id -> rest length; connections act like strings (pull when taut, slack when short)
+  const REST = {};   // edge id -> rest length; connections act like springs (pull when long, push when short)
   let drag = null, press = null, connect = null, stack = [];
   let simOn = false;
 
@@ -202,6 +205,12 @@
       for (let j = i + 1; j < ids.length; j++) {
         const a = P[ids[i]], b = P[ids[j]];
         let dx = b.x - a.x, dy = b.y - a.y, d = Math.hypot(dx, dy);
+        const room = a.r + b.r + ROOM;
+        if (d < room && d > 0.01) {
+          const f = ROOM_K * (room - d) / ROOM, nx0 = dx / d, ny0 = dy / d;
+          if (!(drag && drag.id === ids[i])) { a.vx -= nx0 * f; a.vy -= ny0 * f; }
+          if (!(drag && drag.id === ids[j])) { b.vx += nx0 * f; b.vy += ny0 * f; }
+        }
         const min = a.r + b.r + GAP;
         if (d >= min) continue;
         if (d < 0.01) { dx = Math.random() - 0.5; dy = Math.random() - 0.5; d = Math.hypot(dx, dy); }
@@ -219,8 +228,7 @@
       const dx = b.x - a.x, dy = b.y - a.y, d = Math.hypot(dx, dy) || 1;
       if (REST[e.id] == null) REST[e.id] = clamp(d, a.r + b.r + 40, 340);
       const stretch = d - REST[e.id];
-      if (stretch <= 0) continue;             // slack string: no force
-      const f = stretch * STRING_K, nx = dx / d, ny = dy / d;
+      const f = stretch * (stretch > 0 ? STRING_K : PUSH_K), nx = dx / d, ny = dy / d;
       const aFixed = drag && drag.id === e.from, bFixed = drag && drag.id === e.to;
       if (!aFixed) { a.vx += nx * f; a.vy += ny * f; }
       if (!bFixed) { b.vx -= nx * f; b.vy -= ny * f; }

@@ -101,6 +101,14 @@ button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 2.5
 }
 .pill-btn.primary { background: var(--ink); color: var(--white); }
 
+.back-btn {
+  position: fixed; top: 58px; left: 18px; z-index: 7; height: 34px; max-width: 240px; border-radius: 17px;
+  background: var(--white); box-shadow: 0 2px 0 rgba(43, 58, 85, .12); display: flex; align-items: center; gap: 7px;
+  padding: 0 14px 0 10px; font: 600 13px var(--font); color: var(--ink);
+}
+.back-btn span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.back-btn:hover { transform: translateY(-1px); }
+.back-btn[hidden] { display: none; }
 .corner-left { position: fixed; left: 18px; bottom: 18px; z-index: 6; display: flex; align-items: center; gap: 12px; }
 .hint { font: 500 12px var(--font); color: var(--faint); }
 
@@ -208,6 +216,7 @@ body.panel-open .switcher { right: 358px; }
 
 /* ---------- small screens ---------- */
 @media (max-width: 720px) {
+  .back-btn { top: auto; bottom: 18px; left: 92px; max-width: calc(100vw - 260px); }
   .wordmark, .hint { display: none; }
   .topbar { top: 14px; }
   #panel { top: auto; left: 0; width: auto; height: 62vh; border-radius: 20px 20px 0 0; box-shadow: 0 -4px 0 rgba(43, 58, 85, .07); transform: translateY(24px); padding-bottom: 28px; }

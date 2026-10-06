@@ -2,14 +2,11 @@
   "use strict";
 
   // ---------- constants ----------
-  const STORE_KEY = "mathblobs.v1";
-  const TYPES = {
-    req:  { label: "requires",    back: "required by",    short: "requires", c: "#3E8E8A", w: 7,  dash: null },
-    ex:   { label: "example of",  back: "has example",    short: "example",  c: "#E8705F", w: 7,  dash: "12 11" },
-    gen:  { label: "generalizes", back: "generalized by", short: "general",  c: "#F2B544", w: 11, dash: null },
-    dual: { label: "dual to",     back: "dual to",        short: "dual",     c: "#B9A5D6", w: 7,  dash: "1 12" }
-  };
-  const TYPE_ORDER = ["req", "ex", "gen", "dual"];
+  const STORE_KEY = "mathblobs.v2";   // bumped for the Chapter 9 content; old saves are ignored
+  const TYPES = window.MB_DEMO.linkTypes;
+  const DEFAULT_TYPES = ["special", "needs", "same", "contrasts"];
+  const FALLBACK_TYPE = { label: "linked to", back: "linked to", short: "linked", c: "#A8A294", w: 5, dash: null };
+  const typeOf = (k) => TYPES[k] || FALLBACK_TYPE;
   const PALETTE = ["#E8705F", "#F2B544", "#3E8E8A", "#B9A5D6", "#2B3A55"];
   const LIGHT = ["#F2B544", "#B9A5D6"];
   const SHAPES = [
@@ -152,7 +149,7 @@
     return el;
   }
   function edgeEl(e) {
-    const t = TYPES[e.type];
+    const t = typeOf(e.type);
     const l = document.createElementNS(SVGNS, "line");
     l.dataset.edge = e.id;
     l.setAttribute("stroke", t.c);
@@ -176,7 +173,7 @@
     const temp = $("#tempEdge");
     if (temp) {
       if (connect && connect.type && connect.cursor) {
-        const t = TYPES[connect.type], a = P[connect.from];
+        const t = typeOf(connect.type), a = P[connect.from];
         temp.style.display = "";
         temp.setAttribute("stroke", t.c); temp.setAttribute("stroke-width", t.w);
         if (t.dash) temp.setAttribute("stroke-dasharray", t.dash); else temp.removeAttribute("stroke-dasharray");
@@ -353,7 +350,7 @@
     connect = { from: id, type: null, cursor: null };
     flash(id, "wiggle");
     menuEl.innerHTML = "";
-    TYPE_ORDER.forEach((k, i) => {
+    (map().types || DEFAULT_TYPES).filter((k) => TYPES[k]).forEach((k, i) => {
       const t = TYPES[k];
       const b = document.createElement("button");
       b.className = "puck";
@@ -389,9 +386,10 @@
     const others = Object.entries(P).filter(([k]) => k !== connect.from).map(([, p]) => p);
     let best = null;
     for (const extra of [34, 46, 60]) {
-      for (let rot = 0; rot < 90; rot += 6) {
+      const step = 360 / Math.max(1, sizes.length);
+      for (let rot = 0; rot < step; rot += 6) {
         const rects = sizes.map((s, i) => {
-          const a = (rot + 45 + i * 90) * Math.PI / 180;
+          const a = (rot + step / 2 + i * step) * Math.PI / 180;
           const rad = c.r + extra + Math.abs(Math.cos(a)) * (s.w / 2 - 17);
           const x = c.x + Math.cos(a) * rad - s.w / 2, y = c.y + Math.sin(a) * rad - s.h / 2;
           return { x, y, w: s.w, h: s.h };
@@ -502,9 +500,11 @@
       h += `<div class="p-label">${es.length} CONNECTION${es.length === 1 ? "" : "S"}</div><div class="conns">`;
       if (!es.length) h += `<div class="p-empty">Press and hold the blob, or use “connect…”, to link it to another term.</div>`;
       for (const e of es) {
-        const ty = TYPES[e.type], out = e.from === id, other = out ? e.to : e.from;
+        const ty = typeOf(e.type), out = e.from === id, other = out ? e.to : e.from;
+        const [on, off] = ty.dash ? ty.dash.split(" ").map(Number) : [0, 0];
+        const seg = on < 3 ? 4 : Math.min(9, on * 0.6), gap = on < 3 ? 5 : Math.min(7, off * 0.5);
         const swatch = ty.dash
-          ? `background-image:repeating-linear-gradient(90deg,${ty.c} 0 ${ty.dash === "1 12" ? 4 : 7}px,transparent ${ty.dash === "1 12" ? 4 : 7}px ${ty.dash === "1 12" ? 9 : 13}px)`
+          ? `background-image:repeating-linear-gradient(90deg,${ty.c} 0 ${seg}px,transparent ${seg}px ${seg + gap}px)`
           : `background:${ty.c}`;
         h += `<div class="conn"><div class="swatch" style="height:${ty.w > 8 ? 8 : 5}px;${swatch}"></div>
           <div class="txt"><div class="lbl">${out ? ty.label : ty.back}</div>
@@ -565,8 +565,27 @@
   });
 
   // ---------- maps ----------
+  // Map history: every switch is a browser history entry (#map-id), so the
+  // back button and the browser's own back both return to the previous map.
+  const mapTrail = [];
+  function renderBack() {
+    const btn = $("#backBtn"), prev = mapTrail[mapTrail.length - 1];
+    btn.hidden = !prev;
+    if (prev) $("#backLabel").textContent = S.maps[prev] ? S.maps[prev].title : "back";
+  }
+  $("#backBtn").addEventListener("click", () => history.back());
+  window.addEventListener("popstate", () => {
+    const id = decodeURIComponent(location.hash.slice(1));
+    if (!S.maps[id] || id === S.current) return;
+    if (mapTrail[mapTrail.length - 1] === id) mapTrail.pop(); else mapTrail.push(S.current);
+    switchMap(id, { fromHistory: true });
+  });
   function switchMap(id, opts = {}) {
     if (!S.maps[id]) return;
+    if (!opts.fromHistory && id !== S.current) {
+      mapTrail.push(S.current);
+      history.pushState(null, "", "#" + encodeURIComponent(id));
+    }
     if (simOn) writeBack();
     if (connect) closeConnect();
     S.current = id;
@@ -575,6 +594,7 @@
     renderMap();
     if (!opts.keepPanel) closePanel();
     applySearchFade();
+    renderBack();
   }
   function renderChip() {
     const m = map();
@@ -606,7 +626,7 @@
         if (e.key === "Enter" && inp.value.trim()) {
           let id = slug(inp.value), n = 2;
           while (S.maps[id]) id = slug(inp.value) + "-" + n++;
-          S.maps[id] = { title: inp.value.trim(), blobs: [], edges: [] };
+          S.maps[id] = { title: inp.value.trim(), types: DEFAULT_TYPES.slice(), blobs: [], edges: [] };
           S.order.push(id);
           toggleGrid(false);
           switchMap(id);
@@ -794,6 +814,9 @@
 
   // ---------- boot ----------
   S = load();
+  const startMap = decodeURIComponent(location.hash.slice(1));
+  if (S.maps[startMap]) S.current = startMap;
+  history.replaceState(null, "", "#" + encodeURIComponent(S.current));
   layout();
   placeFromData();
   renderMap();

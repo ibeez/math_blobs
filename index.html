@@ -15,6 +15,7 @@
 <main id="stage" aria-label="Concept map">
   <div id="board">
     <svg id="edges" aria-hidden="true"></svg>
+    <div id="ghosts"></div>
     <div id="blobs"></div>
     <div id="menu"></div>
   </div>
@@ -25,12 +26,17 @@
 <div class="topbar">
   <div class="search">
     <svg width="15" height="15" viewBox="0 0 15 15" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><circle cx="6.2" cy="6.2" r="4.6"/><line x1="9.6" y1="9.6" x2="13.4" y2="13.4"/></svg>
-    <input id="search" type="text" placeholder="search a term…" autocomplete="off" spellcheck="false" aria-label="Search terms">
+    <input id="search" type="text" placeholder="type a term…" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="Type a term to add it">
     <div id="results" role="listbox"></div>
   </div>
   <button id="addBtn" class="round-btn" title="Add a term" aria-label="Add a term">
     <svg width="16" height="16" viewBox="0 0 16 16" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><line x1="8" y1="2.4" x2="8" y2="13.6"/><line x1="2.4" y1="8" x2="13.6" y2="8"/></svg>
   </button>
+</div>
+
+<div class="under-bar">
+  <div id="progress" aria-live="polite"></div>
+  <div id="note" class="note" role="status" hidden></div>
 </div>
 
 <button id="backBtn" class="back-btn" hidden aria-label="Back to the previous map">
@@ -39,13 +45,20 @@
 </button>
 
 <div class="corner-left">
-  <button id="resetBtn" class="pill-btn" title="Restore the demo maps">reset</button>
+  <button id="resetBtn" class="pill-btn" title="Restore the demo lessons">reset</button>
+  <button id="hintBtn" class="pill-btn student-only" title="A nudge toward a term you have not found">hint</button>
+  <button id="revealBtn" class="pill-btn student-only" aria-pressed="false" title="Show the core terms and links your map is missing">show what's missing</button>
   <span class="hint">drag to move · click for detail · press and hold to connect</span>
 </div>
 
 <div class="switcher">
   <div id="mapGrid" class="map-grid" hidden>
-    <div class="map-grid-head"><span>YOUR MAPS</span><button id="gridClose" class="x" aria-label="Close">✕</button></div>
+    <div class="map-grid-head"><span>LESSONS</span>
+      <div class="mode-toggle" role="group" aria-label="View">
+        <button type="button" data-mode="student" aria-pressed="true">my map</button>
+        <button type="button" data-mode="key" aria-pressed="false">answer key</button>
+      </div>
+      <button id="gridClose" class="x" aria-label="Close">✕</button></div>
     <div id="mapCards" class="map-cards"></div>
   </div>
   <button id="mapChip" class="map-chip" aria-haspopup="true">

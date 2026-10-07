@@ -14,7 +14,9 @@
 //   blobs (u, v are 0–1 positions on the board, s is size in px, c is colour)
 //   and joins them with typed edges. Edges are core by default (the clean
 //   chart a good student would draw); `tier: "valid"` marks links that are
-//   true and accepted but not expected, and never shown in the reveal.
+//   true and accepted but not expected, and never shown in the reveal. `summary`
+//   is the short paragraph shown by the summary toggle, with the same [[id|text]]
+//   links; it is read from here (not from saved state) so old saves still get it.
 
 window.MB_DEMO = {
   linkTypes: {
@@ -77,6 +79,7 @@ window.MB_DEMO = {
   maps: {
     expressions: {
       title: "9.1–9.2 Expressions",
+      summary: "An [[expression|expression]] puts numbers, [[variable|variables]] and operations together, like 3x + 5. Each part joined by + or − is a [[term|term]], and the number multiplying a variable is its [[coefficient|coefficient]]. A [[numexpr|numerical expression]] has only numbers, so you can find its value using the [[order|order of operations]]. Two expressions are [[equivexpr|equivalent]] if they give the same value for every value of the variable. Looking at the [[structure|structure]] of an expression can tell you things without any calculating.",
       types: ["part", "special", "needs"],
       blobs: [
         { id: "expression",  u: .44, v: .42, s: 112, c: "#2B3A55" },
@@ -103,6 +106,7 @@ window.MB_DEMO = {
 
     equations: {
       title: "9.3 Equations",
+      summary: "An [[equation|equation]] says that two [[expression|expressions]] are equal. A [[solution|solution]] is a value of the variable that makes it true. Some equations are true for only some values, called [[conditional|conditional equations]], and some are true for every value, called [[identity|identities]]. A [[panbalance|pan balance]] is a picture of an equation: both sides weigh the same. That is why doing the same thing to both sides, a [[samesol|same-solution transformation]], keeps the solution safe.",
       types: ["special", "needs", "models", "contrasts"],
       blobs: [
         { id: "equation",    u: .42, v: .44, s: 110, c: "#2B3A55" },
@@ -128,6 +132,7 @@ window.MB_DEMO = {
 
     sequences: {
       title: "9.5 Sequences",
+      summary: "A [[sequence|sequence]] is a list of numbers in order. In an [[arithmetic|arithmetic sequence]] you add the same amount each time, which makes it [[linear|linear]]. In a [[geometric|geometric sequence]] you multiply by the same amount each time, which makes it [[exponential|exponential]]. A [[repeating|repeating pattern]] cycles, and you can find what sits in any position using [[remainder|division with remainder]].",
       types: ["special", "needs", "contrasts"],
       blobs: [
         { id: "sequence",    u: .38, v: .40, s: 108, c: "#2B3A55" },
@@ -152,6 +157,7 @@ window.MB_DEMO = {
 
     functions: {
       title: "9.6 Functions",
+      summary: "A [[func|function]] gives exactly one output for each input. You can show one in different ways, called [[representation|representations]]: in words, in a table, as a graph or as an equation. A [[linear|linear function]] has a constant [[rate|rate of change]], which is the same as its [[slope|slope]]. Its graph crosses the y-axis at the [[yint|y-intercept]], which matches the [[zeroth|0th entry]] of its sequence.",
       types: ["special", "needs", "same", "shownAs"],
       blobs: [
         { id: "func",           u: .36, v: .34, s: 108, c: "#2B3A55" },
@@ -175,6 +181,7 @@ window.MB_DEMO = {
 
     relationships: {
       title: "9.7 Linear & Other Relationships",
+      summary: "A [[linear|linear function]] has a constant [[slope|slope]], and a [[slopetri|slope triangle]] drawn on its graph reveals it. A [[proportional|proportional relationship]] is a linear one that goes through the origin. Other relationships behave differently: an [[inverse|inverse proportion]] makes a curve, a [[quadratic|quadratic function]] has constant second differences, and an [[exponential|exponential function]] multiplies by the same factor each step. Checking the [[differences|differences]] tells you which kind you have.",
       types: ["special", "reveals", "contrasts"],
       blobs: [
         { id: "linear",       u: .40, v: .40, s: 108, c: "#3E8E8A" },

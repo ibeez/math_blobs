@@ -51,6 +51,10 @@
   let simOn = false;
   let revealOn = false;
   const G = {};      // ghost positions while the reveal is on: id -> {x, y, r}
+  // Test mode (?test) switches off the hint features: summary, hint, show what's missing. Not saved.
+  const TEST = new URLSearchParams(location.search).has("test");
+  let summaryOn = false;
+  const shown = new Set();   // terms revealed from the summary: they show as ghosts until dragged in
 
   function freshState() {
     const d = JSON.parse(JSON.stringify(window.MB_DEMO));
@@ -154,6 +158,7 @@
     svg.appendChild(temp);
     for (const b of m.blobs) blobsEl.appendChild(blobEl(b));
     renderGhosts();
+    renderSummary();
     if (!m.blobs.length) {
       const empty = document.createElement("div");
       empty.className = "empty-note";
@@ -198,10 +203,10 @@
     ghostsEl.innerHTML = "";
     for (const k of Object.keys(G)) delete G[k];
     for (const l of svg.querySelectorAll(".ghost-edge")) l.remove();
-    if (!revealOn || isKey()) return;
+    if (isKey()) return;
     const found = foundIds();
     for (const b of coreTerms()) {
-      if (found.has(b.id)) continue;
+      if (found.has(b.id) || !(revealOn || shown.has(b.id))) continue;
       const g = { x: toX(b.u), y: toY(b.v), r: b.s / 2 };
       G[b.id] = g;
       const el = document.createElement("div");
@@ -213,7 +218,7 @@
       ghostsEl.appendChild(el);
     }
     const first = svg.firstChild;
-    for (const k of missedCoreLinks()) {
+    for (const k of revealOn ? missedCoreLinks() : []) {
       const t = typeOf(k.type), l = document.createElementNS(SVGNS, "line");
       l.classList.add("ghost-edge");
       l.dataset.from = k.from; l.dataset.to = k.to;
@@ -969,6 +974,7 @@
   }
   let hintN = 0;
   function hint() {
+    if (TEST) return;
     const found = foundIds(), key = lesson();
     const unfound = coreTerms().filter((b) => !found.has(b.id));
     if (!unfound.length) return say("You have found every term in this lesson.");
@@ -979,12 +985,35 @@
     say(`Hint: a term starting with “${S.terms[b.id].name[0].toUpperCase()}”${near ? `, connected to ${S.terms[near].name}` : ""}.`);
   }
   function toggleReveal(force) {
+    if (TEST) return;
     revealOn = force === undefined ? !revealOn : force;
     $("#revealBtn").textContent = revealOn ? "hide what's missing" : "show what's missing";
     $("#revealBtn").setAttribute("aria-pressed", String(revealOn));
     renderMap();
     if (revealOn && !Object.keys(G).length && !svg.querySelector(".ghost-edge")) say("Nothing missing: your map has every core term and link.");
   }
+  // Summary: a short paragraph for the lesson; its words only reveal a blob (a ghost to drag in), like the reveal does.
+  function renderSummary() {
+    const box = $("#summary"), text = (window.MB_DEMO.maps[S.current] || {}).summary;
+    box.hidden = !(summaryOn && !TEST && !isKey() && text);
+    $("#summaryBtn").setAttribute("aria-pressed", String(summaryOn));
+    if (box.hidden) return;
+    const found = foundIds(), inLesson = new Set(lesson().blobs.map((b) => b.id));
+    box.innerHTML = esc(text).replace(/\[\[([^\]|]+)\|([^\]]+)\]\]/g, (all, id, t) =>
+      inLesson.has(id) ? `<span class="sum-term${found.has(id) ? " done" : ""}" role="button" tabindex="0" data-sum="${esc(id)}">${t}</span>` : t);
+  }
+  function revealFromSummary(id) {
+    if (blobIn(map(), id)) { flash(id, "pulse"); return; }
+    shown.add(id);
+    renderGhosts();
+    draw();
+  }
+  $("#summaryBtn").addEventListener("click", () => { summaryOn = !summaryOn; renderSummary(); });
+  $("#summary").addEventListener("click", (e) => { const t = e.target.closest("[data-sum]"); if (t) revealFromSummary(t.dataset.sum); });
+  $("#summary").addEventListener("keydown", (e) => {
+    const t = e.target.closest("[data-sum]");
+    if (t && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); revealFromSummary(t.dataset.sum); }
+  });
   $("#hintBtn").addEventListener("click", hint);
   $("#revealBtn").addEventListener("click", () => toggleReveal());
 
@@ -1072,8 +1101,10 @@
   const qs = new URLSearchParams(location.search);
   if (qs.has("key")) S.mode = "key";
   if (qs.has("student")) S.mode = "student";
+  document.body.classList.toggle("test-mode", TEST);
+  $("#testBadge").hidden = !TEST;
   applyModeUI();
-  history.replaceState(null, "", "#" + encodeURIComponent(S.current));
+  history.replaceState(null, "", location.search + "#" + encodeURIComponent(S.current));   // keep ?test on reload
   layout();
   placeFromData();
   renderMap();

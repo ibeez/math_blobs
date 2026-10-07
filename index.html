@@ -21,7 +21,7 @@
   </div>
 </main>
 
-<div class="wordmark">mathblobs</div>
+<div class="wordmark">mathblobs<span id="testBadge" class="test-badge" hidden>test mode</span></div>
 
 <div class="topbar">
   <div class="search">
@@ -29,6 +29,9 @@
     <input id="search" type="text" placeholder="type a term…" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="Type a term to add it">
     <div id="results" role="listbox"></div>
   </div>
+  <button id="summaryBtn" class="round-btn student-only hint-feature" aria-pressed="false" title="Show a short summary of this lesson" aria-label="Show a lesson summary">
+    <svg width="16" height="16" viewBox="0 0 16 16" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><line x1="2.5" y1="4" x2="13.5" y2="4"/><line x1="2.5" y1="8" x2="13.5" y2="8"/><line x1="2.5" y1="12" x2="9" y2="12"/></svg>
+  </button>
   <button id="addBtn" class="round-btn" title="Add a term" aria-label="Add a term">
     <svg width="16" height="16" viewBox="0 0 16 16" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><line x1="8" y1="2.4" x2="8" y2="13.6"/><line x1="2.4" y1="8" x2="13.6" y2="8"/></svg>
   </button>
@@ -37,6 +40,7 @@
 <div class="under-bar">
   <div id="progress" aria-live="polite"></div>
   <div id="note" class="note" role="status" hidden></div>
+  <div id="summary" class="summary" hidden></div>
 </div>
 
 <button id="backBtn" class="back-btn" hidden aria-label="Back to the previous map">
@@ -46,8 +50,8 @@
 
 <div class="corner-left">
   <button id="resetBtn" class="pill-btn" title="Restore the demo lessons">reset</button>
-  <button id="hintBtn" class="pill-btn student-only" title="A nudge toward a term you have not found">hint</button>
-  <button id="revealBtn" class="pill-btn student-only" aria-pressed="false" title="Show the core terms and links your map is missing">show what's missing</button>
+  <button id="hintBtn" class="pill-btn student-only hint-feature" title="A nudge toward a term you have not found">hint</button>
+  <button id="revealBtn" class="pill-btn student-only hint-feature" aria-pressed="false" title="Show the core terms and links your map is missing">show what's missing</button>
   <span class="hint">drag to move · click for detail · press and hold to connect</span>
 </div>
 

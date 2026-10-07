@@ -150,6 +150,19 @@ button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 2.5
 .search.wobble { animation: boxWobble .45s ease-out; }
 @keyframes boxWobble { 20% { transform: translateX(-6px) } 45% { transform: translateX(5px) } 70% { transform: translateX(-2px) } }
 body.key-mode .student-only { display: none; }
+/* test mode: every hint feature carries .hint-feature and is switched off here; add more rules for later */
+body.test-mode .hint-feature { display: none; }
+.test-badge { margin-left: 10px; padding: 3px 10px; border-radius: 11px; background: var(--ink); color: var(--white); font: 600 11.5px var(--font); letter-spacing: 0; vertical-align: 2px; }
+.test-badge[hidden] { display: none; }
+#summaryBtn[aria-pressed="true"] { background: var(--ink); color: var(--white); }
+.summary {
+  pointer-events: auto; background: var(--white); color: var(--ink); border-radius: 16px; padding: 12px 16px;
+  font: 500 14px/1.55 var(--font); box-shadow: var(--shadow); animation: rise .2s ease-out;
+}
+.summary[hidden] { display: none; }
+.sum-term { font-weight: 600; text-decoration: underline dotted; text-underline-offset: 3px; cursor: pointer; }
+.sum-term:hover { background: var(--line); border-radius: 4px; }
+.sum-term.done { color: var(--faint); cursor: default; }
 .pill-btn[aria-pressed="true"] { background: var(--ink); color: var(--white); }
 .tier { flex: none; height: 22px; border-radius: 11px; padding: 0 9px; font: 600 11px var(--font); background: var(--ink); color: var(--white); }
 .tier.valid { background: var(--line); color: var(--soft); }

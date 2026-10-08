@@ -524,28 +524,11 @@
   function finishConnect(to) {
     const { from, type } = connect;
     const m = map();
-    const samePairEdge = (e) => (e.from === from && e.to === to) || (e.from === to && e.to === from);
-    const replaced = m.edges.filter(samePairEdge);
-    m.edges = m.edges.filter((e) => !samePairEdge(e));
-    const edge = { id: nextEdgeId(), from, to, type };
-    m.edges.push(edge);
-    closeConnect();
-    renderMap();
-    // A link that is not in the key wobbles, then goes away (the link it replaced comes back).
-    if (!isKey() && !keyMatch(edge)) {
-      const l = svg.querySelector(`line[data-edge="${edge.id}"]`);
-      const drop = () => {
-        m.edges = m.edges.filter((e) => e.id !== edge.id).concat(replaced);
-        save(); renderMap();
-        if (panel.classList.contains("open")) renderPanel();
-      };
-      if (l) { l.classList.add("edge-wobble"); l.addEventListener("animationend", drop, { once: true }); } else drop();
-      say("That link is not in the reference chart, so it did not stay.");
-      return;
-    }
+    m.edges = m.edges.filter((e) => !((e.from === from && e.to === to) || (e.from === to && e.to === from)));
+    m.edges.push({ id: nextEdgeId(), from, to, type });
     save();
-    edgeFx(edge.id, "edge-ok");
-    flash(to, "pulse");
+    closeConnect();
+    renderMap();   // no feedback here: links are only judged when the student presses "check"
     if (panel.classList.contains("open")) renderPanel();
   }
   function closeConnect() {
@@ -641,7 +624,7 @@
         h += `<div class="conn"><div class="swatch" style="height:${ty.w > 8 ? 8 : 5}px;${swatch}"></div>
           <div class="txt"><div class="lbl">${out ? ty.label : ty.back}</div>
           <div class="oth">${out ? "→" : "←"} <button data-term="${esc(other)}">${esc(S.terms[other].name)}</button></div>
-          ${!isKey() && !keyMatch(e) ? '<div class="oth">not in the reference chart</div>' : ""}</div>
+</div>
           ${isKey() ? `<button class="tier${e.tier === "valid" ? " valid" : ""}" data-tier="${e.id}" title="Core links appear in the reveal; valid links are accepted but never revealed">${e.tier === "valid" ? "valid" : "core"}</button>` : ""}
           <button class="x rm" data-edge="${e.id}" aria-label="Remove connection" title="Remove">✕</button></div>`;
       }
@@ -1036,6 +1019,16 @@
   $("#summary").addEventListener("keydown", (e) => {
     const t = e.target.closest("[data-sum]");
     if (t && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); revealFromSummary(t.dataset.sum); }
+  });
+  // Check: the only place a student's links are compared with the answer key.
+  $("#checkBtn").addEventListener("click", () => {
+    if (TEST || isKey()) return;
+    const edges = map().edges;
+    if (!edges.length) return say("Draw some links first, then check.");
+    let ok = 0;
+    for (const e of edges) { const good = !!keyMatch(e); if (good) ok++; edgeFx(e.id, good ? "edge-ok" : "edge-wobble"); }
+    const missing = missedCoreLinks().length;
+    say(`${ok} of ${edges.length} links match the chart${ok < edges.length ? ", the wobbling ones do not" : ""}. ${missing ? `${missing} chart link${missing > 1 ? "s are" : " is"} still missing.` : "None are missing."}`);
   });
   $("#hintBtn").addEventListener("click", hint);
   $("#revealBtn").addEventListener("click", () => toggleReveal());

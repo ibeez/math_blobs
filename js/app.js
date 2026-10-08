@@ -63,7 +63,6 @@
     d.current = d.order[0];
     d.mode = "student";
     d.work = {};
-    d.log = [];
     return d;
   }
   function load() {
@@ -71,7 +70,7 @@
       const raw = localStorage.getItem(STORE_KEY);
       if (raw) {
         const s = JSON.parse(raw);
-        if (s && s.maps && s.terms && s.order && s.maps[s.current] && s.work) { s.log = s.log || []; return s; }
+        if (s && s.maps && s.terms && s.order && s.maps[s.current] && s.work) return s;
       }
     } catch (e) { /* storage unavailable: fall back to the demo */ }
     return freshState();
@@ -530,7 +529,6 @@
     m.edges = m.edges.filter((e) => !samePairEdge(e));
     const edge = { id: nextEdgeId(), from, to, type };
     m.edges.push(edge);
-    if (!isKey()) S.log.push({ t: Date.now(), map: S.current, from, to, type, ok: !!keyMatch(edge), test: TEST });   // every link attempt, kept even if the link is dropped
     closeConnect();
     renderMap();
     // A link that is not in the key wobbles, then goes away (the link it replaced comes back).
@@ -1040,14 +1038,6 @@
     if (t && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); revealFromSummary(t.dataset.sum); }
   });
   $("#hintBtn").addEventListener("click", hint);
-  // Answer key mode: download the log of link attempts (right and wrong) as JSON.
-  $("#logBtn").addEventListener("click", () => {
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(new Blob([JSON.stringify(S.log, null, 1)], { type: "application/json" }));
-    a.download = "mathblobs-link-log.json";
-    a.click();
-    URL.revokeObjectURL(a.href);
-  });
   $("#revealBtn").addEventListener("click", () => toggleReveal());
 
   let noteTimer;
@@ -1114,10 +1104,9 @@
   $("#resetBtn").addEventListener("click", () => {
     if (!confirm("Restore the demo lessons and clear your maps? Anything you added or moved will be lost.")) return;
     try { localStorage.removeItem(STORE_KEY); } catch (e) { /* ignore */ }
-    const mode = S.mode, cur = S.current, log = S.log;
+    const mode = S.mode, cur = S.current;
     S = freshState();
     S.mode = mode;
-    S.log = log;   // the attempt log survives a reset
     if (S.maps[cur]) S.current = cur;
     closePanel(); revealOn = false; applyModeUI();
     placeFromData(); renderMap();

@@ -150,7 +150,7 @@
   // ---------- rendering ----------
   function renderMap() {
     blobsEl.innerHTML = "";
-    svg.innerHTML = "";
+    svg.innerHTML = arrowDefs();
     const m = map();
     for (const e of m.edges) svg.appendChild(edgeEl(e));
     const temp = document.createElementNS(SVGNS, "line");
@@ -187,6 +187,21 @@
     el.setAttribute("aria-label", S.terms[b.id].name);
     return el;
   }
+  // Arrowheads point from -> to ("from <label> to"); "same as" style types are symmetric and get none.
+  const arrowSize = (t) => 12 + t.w * 1.5;
+  function arrowDefs() {
+    return "<defs>" + Object.entries(window.MB_DEMO.linkTypes).filter(([, t]) => !t.symmetric).map(([k, t]) => {
+      const z = arrowSize(t);
+      return `<marker id="arrow-${k}" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="${z}" markerHeight="${z}" markerUnits="userSpaceOnUse" orient="auto"><path d="M0 0 L10 5 L0 10 z" fill="${t.c}"/></marker>`;
+    }).join("") + "</defs>";
+  }
+  // Set a line's ends: start at a, stop at b's rim so the arrowhead is not hidden under the blob.
+  function place(l, a, b, type) {
+    const t = typeOf(type), d = Math.hypot(b.x - a.x, b.y - a.y) || 1;
+    const cut = t.symmetric ? 0 : Math.min(b.r + 3, d / 2);
+    l.setAttribute("x1", a.x); l.setAttribute("y1", a.y);
+    l.setAttribute("x2", a.x + (b.x - a.x) * (d - cut) / d); l.setAttribute("y2", a.y + (b.y - a.y) * (d - cut) / d);
+  }
   function edgeEl(e) {
     const t = typeOf(e.type);
     const l = document.createElementNS(SVGNS, "line");
@@ -195,6 +210,7 @@
     l.setAttribute("stroke-width", t.w);
     l.setAttribute("stroke-linecap", "round");
     if (t.dash) l.setAttribute("stroke-dasharray", t.dash);
+    if (!t.symmetric) l.setAttribute("marker-end", `url(#arrow-${e.type})`);
     if (isKey() && e.tier === "valid") l.setAttribute("opacity", "0.4");
     return l;
   }
@@ -221,7 +237,8 @@
     for (const k of revealOn ? missedCoreLinks() : []) {
       const t = typeOf(k.type), l = document.createElementNS(SVGNS, "line");
       l.classList.add("ghost-edge");
-      l.dataset.from = k.from; l.dataset.to = k.to;
+      l.dataset.from = k.from; l.dataset.to = k.to; l.dataset.type = k.type;
+      if (!t.symmetric) l.setAttribute("marker-end", `url(#arrow-${k.type})`);
       l.setAttribute("stroke", t.c); l.setAttribute("stroke-width", 4);
       l.setAttribute("stroke-dasharray", "8 9"); l.setAttribute("stroke-linecap", "round");
       svg.insertBefore(l, first);
@@ -236,15 +253,13 @@
       const e = map().edges.find((x) => x.id == l.dataset.edge);
       const a = e && P[e.from], b = e && P[e.to];
       if (!a || !b) continue;
-      l.setAttribute("x1", a.x); l.setAttribute("y1", a.y);
-      l.setAttribute("x2", b.x); l.setAttribute("y2", b.y);
+      place(l, a, b, e.type);
     }
     for (const l of svg.querySelectorAll(".ghost-edge")) {
       const a = P[l.dataset.from] || G[l.dataset.from], b = P[l.dataset.to] || G[l.dataset.to];
       if (!a || !b) { l.style.display = "none"; continue; }
       l.style.display = "";
-      l.setAttribute("x1", a.x); l.setAttribute("y1", a.y);
-      l.setAttribute("x2", b.x); l.setAttribute("y2", b.y);
+      place(l, a, b, l.dataset.type);
     }
     const temp = $("#tempEdge");
     if (temp) {
@@ -509,20 +524,28 @@
   function finishConnect(to) {
     const { from, type } = connect;
     const m = map();
-    m.edges = m.edges.filter((e) => !((e.from === from && e.to === to) || (e.from === to && e.to === from)));
+    const samePairEdge = (e) => (e.from === from && e.to === to) || (e.from === to && e.to === from);
+    const replaced = m.edges.filter(samePairEdge);
+    m.edges = m.edges.filter((e) => !samePairEdge(e));
     const edge = { id: nextEdgeId(), from, to, type };
     m.edges.push(edge);
-    save();
     closeConnect();
     renderMap();
-    // Feedback is a response, not a grade: a link that is not in the key wobbles but stays.
+    // A link that is not in the key wobbles, then goes away (the link it replaced comes back).
     if (!isKey() && !keyMatch(edge)) {
-      edgeFx(edge.id, "edge-wobble");
-      say("Not in the reference chart. It stays on your map.");
-    } else {
-      edgeFx(edge.id, "edge-ok");
-      flash(to, "pulse");
+      const l = svg.querySelector(`line[data-edge="${edge.id}"]`);
+      const drop = () => {
+        m.edges = m.edges.filter((e) => e.id !== edge.id).concat(replaced);
+        save(); renderMap();
+        if (panel.classList.contains("open")) renderPanel();
+      };
+      if (l) { l.classList.add("edge-wobble"); l.addEventListener("animationend", drop, { once: true }); } else drop();
+      say("That link is not in the reference chart, so it did not stay.");
+      return;
     }
+    save();
+    edgeFx(edge.id, "edge-ok");
+    flash(to, "pulse");
     if (panel.classList.contains("open")) renderPanel();
   }
   function closeConnect() {

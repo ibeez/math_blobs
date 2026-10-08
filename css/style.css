@@ -150,7 +150,6 @@ button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 2.5
 .search.wobble { animation: boxWobble .45s ease-out; }
 @keyframes boxWobble { 20% { transform: translateX(-6px) } 45% { transform: translateX(5px) } 70% { transform: translateX(-2px) } }
 body.key-mode .student-only { display: none; }
-body:not(.key-mode) .key-only { display: none; }
 /* test mode: every hint feature carries .hint-feature and is switched off here; add more rules for later */
 body.test-mode .hint-feature { display: none; }
 .test-badge { margin-left: 10px; padding: 3px 10px; border-radius: 11px; background: var(--ink); color: var(--white); font: 600 11.5px var(--font); letter-spacing: 0; vertical-align: 2px; }

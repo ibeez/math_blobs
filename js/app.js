@@ -1021,12 +1021,37 @@
     if (t && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); revealFromSummary(t.dataset.sum); }
   });
   // Check: the only place a student's links are compared with the answer key.
+  // After a check that finds wrong links, the button turns into "delete wrong links" for a few seconds.
+  let delTimer;
+  function resetCheckBtn() {
+    clearTimeout(delTimer);
+    const b = $("#checkBtn");
+    b.textContent = "check my links";
+    b.title = "Check your links against the answer key";
+    delete b.dataset.del;
+  }
   $("#checkBtn").addEventListener("click", () => {
     if (TEST || isKey()) return;
+    if ($("#checkBtn").dataset.del) {
+      const before = map().edges.length;
+      map().edges = map().edges.filter((e) => keyMatch(e));
+      const gone = before - map().edges.length;
+      resetCheckBtn();
+      save(); renderMap(); renderPanel();
+      return say(gone ? `Deleted ${gone} wrong link${gone > 1 ? "s" : ""}.` : "No wrong links to delete.");
+    }
     const edges = map().edges;
     if (!edges.length) return say("Draw some links first, then check.");
     let ok = 0;
     for (const e of edges) { const good = !!keyMatch(e); if (good) ok++; edgeFx(e.id, good ? "edge-ok" : "edge-wobble"); }
+    resetCheckBtn();
+    if (ok < edges.length) {
+      const b = $("#checkBtn");
+      b.textContent = "delete wrong links";
+      b.title = "Remove the links that do not match the chart";
+      b.dataset.del = "1";
+      delTimer = setTimeout(resetCheckBtn, 5000);
+    }
     const missing = missedCoreLinks().length;
     say(`${ok} of ${edges.length} links match the chart${ok < edges.length ? ", the wobbling ones do not" : ""}. ${missing ? `${missing} chart link${missing > 1 ? "s are" : " is"} still missing.` : "None are missing."}`);
   });
@@ -1055,6 +1080,7 @@
   }
   function setMode(mode) {
     if (mode === S.mode) return;
+    resetCheckBtn();
     if (simOn) writeBack();
     if (connect) closeConnect();
     closePanel();

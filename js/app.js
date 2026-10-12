@@ -243,7 +243,8 @@
       const p = P[el.dataset.id]; if (!p) continue;
       let t = `translate(${p.x - p.r}px, ${p.y - p.r}px)`;
       const d = D[el.dataset.id], m = d ? Math.hypot(d.e1, d.e2) : 0;
-      if (m > 0.004) { const a = Math.atan2(d.e2, d.e1) / 2; t += ` rotate(${a}rad) scale(${Math.exp(m / 2)}, ${Math.exp(-m / 2)}) rotate(${-a}rad)`; }
+      // low plumpness: a dented blob loses a little volume
+      if (m > 0.004) { const a = Math.atan2(d.e2, d.e1) / 2, area = 1 - 0.12 * (1 - JG.plump) * Math.min(1, m / 0.45); t += ` rotate(${a}rad) scale(${Math.exp(m / 2) * area}, ${Math.exp(-m / 2) * area}) rotate(${-a}rad)`; }
       el.style.transform = t;
     }
     for (const l of svg.querySelectorAll("line[data-edge]")) {
@@ -285,6 +286,10 @@
   // ---------- physics: momentum, soft collisions, edge bounce ----------
   // Velocities are px/s and every step uses real elapsed time, so it feels the same at 60 and 120 Hz.
   const D = {};              // squash and stretch per blob: id -> {e1, e2, u1, u2} (amount and its rate)
+  // The dent is one damped spring (the lab's soft body boiled down to a stretch along one axis).
+  const JG = F.jiggle, JMAT = JG.materials[JG.material] || JG.materials.jelly;
+  const J_OMEGA = 2 * Math.PI * JG.stiffness * JMAT[0];
+  const J_DAMP = 6 / Math.max(0.05, JG.wobble * JMAT[1]);
   const touching = new Set();
   let lastTs = 0;
   function startSim() {
@@ -297,6 +302,13 @@
     if (RM.matches || !P[id]) return;
     const d = D[id] || (D[id] = { e1: 0, e2: 0, u1: 0, u2: 0 });
     d.u1 -= (nx * nx - ny * ny) * amt; d.u2 -= 2 * nx * ny * amt;
+  }
+  // A poke: dent the blob toward the point touched. Peak dent is about half the squash setting.
+  function poke(id, w, power = 1) {
+    const p = P[id]; if (!p) return;
+    let nx = w.x - p.x, ny = w.y - p.y; const d = Math.hypot(nx, ny);
+    if (d < 2) { nx = 0; ny = 1; } else { nx /= d; ny /= d; }
+    kick(id, nx, ny, 0.5 * JG.squash * power * J_OMEGA * Math.E);
   }
   function tick(ts) {
     const dt = lastTs ? Math.min(0.033, (ts - lastTs) / 1000) : 1 / 60;
@@ -375,13 +387,12 @@
       if (dm) {   // squash and stretch: a damped spring toward a gentle stretch along the direction of travel
         const spd = Math.hypot(p.vx, p.vy);
         let t1 = 0, t2 = 0;
-        if (spd > 1 && !RM.matches) {
-          const m = fl.squash * 0.13 * Math.tanh(spd / 1300), ux = p.vx / spd, uy = p.vy / spd;
+        if (spd > 1 && !RM.matches) {   // stretch a little along the direction of travel
+          const m = 2 * Math.log(1 + JG.squash * 0.42 * Math.tanh(spd / 900)), ux = p.vx / spd, uy = p.vy / spd;
           t1 = (ux * ux - uy * uy) * m; t2 = 2 * ux * uy * m;
         }
-        const w = 2 * Math.PI * 4.2, z = 0.2;
-        dm.u1 += (w * w * (t1 - dm.e1) - 2 * z * w * dm.u1) * dt;
-        dm.u2 += (w * w * (t2 - dm.e2) - 2 * z * w * dm.u2) * dt;
+        dm.u1 += (J_OMEGA * J_OMEGA * (t1 - dm.e1) - J_DAMP * dm.u1) * dt;
+        dm.u2 += (J_OMEGA * J_OMEGA * (t2 - dm.e2) - J_DAMP * dm.u2) * dt;
         dm.e1 += dm.u1 * dt; dm.e2 += dm.u2 * dt;
         const m = Math.hypot(dm.e1, dm.e2);
         if (m > 0.45) { dm.e1 *= 0.45 / m; dm.e2 *= 0.45 / m; }
@@ -428,7 +439,7 @@
       if (press && !press.moved) { press.long = true; el.classList.remove("holding"); openConnect(id); }
     }, F.hold.ms);
     el.setPointerCapture(e.pointerId);
-    kick(id, 1, 0, 2.5 * F.fling.squash);   // a tiny squeeze says "got you"
+    poke(id, w);   // a dent says "got you"
     startSim();
   }
   // Pull a ghost in: it becomes the student's own blob, already in hand.

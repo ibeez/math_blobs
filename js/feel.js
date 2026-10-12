@@ -24,5 +24,15 @@ window.MB_FEEL = {
     repulsion: 2.9,  // every blob pushes every other away
     friction: 7.3,   // damping for linked blobs; higher settles calmer
     centerPull: 0.35 // drift toward the middle of the board
+  },
+  // Blobs are soft: poke or drag one and it dents, then slowly settles back.
+  jiggle: {
+    stiffness: 3.5,  // Hz, how quickly it springs back
+    wobble: 0.85,    // seconds a wobble takes to die out
+    squash: 0.6,     // how far it dents
+    plump: 0.3,      // 0 deflates when dented, higher keeps its volume
+    material: "mochi",
+    // [stiffness, wobble time, tension] multipliers. Mochi is slow and sticky: it returns without wobbling.
+    materials: { jelly: [1, 1, 1], rubber: [1.7, 0.4, 1.8], mochi: [0.55, 0.28, 0.6] }
   }
 };

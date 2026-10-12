@@ -301,6 +301,7 @@
   }
   function flash(id, cls) {
     const el = blobNode(id); if (!el) return;
+    if (cls === "pulse") popBlob(id, F.summon.pulse, 0.5);   // the swell comes with the ring
     el.classList.remove(cls); void el.offsetWidth; el.classList.add(cls);
     el.addEventListener("animationend", () => el.classList.remove(cls), { once: true });
   }
@@ -327,9 +328,9 @@
   }
   const dentOf = (id) => D[id] || (D[id] = { e1: 0, e2: 0, u1: 0, u2: 0, s: 0, sv: 0, shake: null });
   // Pop: the blob swells a little and settles back. size 0.5 swells it about 15%.
-  function popBlob(id, size) {
+  function popBlob(id, size, gain = 0.3) {
     if (RM.matches || !P[id]) return;
-    dentOf(id).sv += 0.3 * size * J_OMEGA * Math.E;
+    dentOf(id).sv += gain * size * J_OMEGA * Math.E;
     startSim();
   }
   // Shiver: a quick head-shake that dies away.
@@ -953,14 +954,40 @@
     return parts.join("");
   }
   const esc0 = (s) => s.replace(/\[\[|\]\]/g, "");
+  // The spot with the most room: farthest from every other blob (and any ghost) and from the walls.
+  function openSpot(r) {
+    const x0 = r + 20, x1 = W - r - 20, y0 = TOP + r + 10, y1 = H - 64 - r;   // the bottom keeps clear of the buttons
+    const others = [...Object.values(P), ...Object.values(G)];
+    let best = { x: (x0 + x1) / 2, y: (y0 + y1) / 2, room: -1 };
+    for (let y = y0; y <= y1; y += 10) {
+      for (let x = x0; x <= x1; x += 10) {
+        let room = Math.min(x - x0, x1 - x, y - y0, y1 - y) + 20;
+        for (const o of others) { room = Math.min(room, Math.hypot(o.x - x, o.y - y) - o.r - r); if (room <= best.room) break; }
+        if (room > best.room) best = { x, y, room };
+      }
+    }
+    return best;
+  }
+  // Unfold in place: a flat seed appears, widens, then grows tall, and the label fades in last.
+  function unfold(id) {
+    const el = blobNode(id);
+    if (!el || RM.matches) return;
+    const ov = F.summon.overshoot * 2.6, back = (t) => 1 + (ov + 1) * Math.pow(t - 1, 3) + ov * Math.pow(t - 1, 2);
+    const clamp01 = (v) => clamp(v, 0, 1), ink = el.style.color, frames = [];
+    for (let i = 0; i <= 40; i++) {
+      const u = i / 40, a = clamp01((u - 0.2) / 0.3), c = clamp01((u - 0.5) / 0.38);
+      const sx = 0.16 + 0.84 * back(a), sy = c <= 0 ? 0.16 - 0.06 * a : 0.1 + 0.9 * back(c);
+      frames.push({ scale: `${sx} ${sy}`, opacity: clamp01(u / 0.12), color: u < 0.78 ? "transparent" : ink, offset: u });
+    }
+    el.animate(frames, { duration: F.summon.secs * 1000, easing: "linear" });
+  }
   function addBlob(id, color, s = 84) {
-    const m = map();
-    const cx = W / 2 + (Math.random() - 0.5) * 160, cy = TOP + (H - TOP) / 2 + (Math.random() - 0.5) * 120;
-    m.blobs.push({ id, u: cx / W, v: (cy - TOP) / (H - TOP), s, c: color });
-    P[id] = { x: cx, y: cy, r: s / 2, vx: (Math.random() - 0.5) * 270, vy: (Math.random() - 0.5) * 270 };
+    const m = map(), r = s / 2, spot = openSpot(r);
+    m.blobs.push({ id, u: spot.x / W, v: (spot.y - TOP) / (H - TOP), s, c: color });
+    P[id] = { x: spot.x, y: spot.y, r, vx: 0, vy: 0 };
     save();
     renderMap();
-    flash(id, "enter");
+    unfold(id);
     startSim();
   }
 
@@ -1052,7 +1079,7 @@
     const cands = lesson().blobs.flatMap((b) => [S.terms[b.id].name, ...(S.terms[b.id].aliases || [])].map((x) => ({ id: b.id, n: norm(x) })));
     const exact = cands.find((c) => c.n === n);
     if (exact) return exact.id;
-    const tol = n.length <= 4 ? 0 : n.length <= 8 ? 1 : 2;
+    const tol = Math.min(F.summon.typo, n.length <= 4 ? 0 : n.length <= 8 ? 1 : 2);
     let best = null;
     for (const c of cands) {
       const d = lev(n, c.n);

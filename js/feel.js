@@ -40,5 +40,12 @@ window.MB_FEEL = {
     pop: 0.5,        // size of the pop on a link that is in the key (links in the key never shiver)
     shiverAmp: 5,    // px, how far the target blob shakes
     shiverSecs: 1.45 // how long it shivers
+  },
+  // Typing a term to summon its blob.
+  summon: {
+    secs: 0.65,      // how long the blob takes to unfold
+    overshoot: 1,    // how far past full size it swells on the way
+    typo: 1,         // letters a typed term may be off by (longer terms are never allowed more)
+    pulse: 0.5       // size of the swell when the term is already on the map
   }
 };

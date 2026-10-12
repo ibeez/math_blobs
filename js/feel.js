@@ -16,5 +16,13 @@ window.MB_FEEL = {
     maxSpeed: 700,   // px/s cap on a fling
     squash: 2,       // how hard a blob dents on impact
     push: 0.7        // how much a moving blob shoves the ones it hits
+  },
+  // Links act as springs and the map spreads back out on its own.
+  springs: {
+    strength: 8,     // pull per px of stretch
+    rest: 240,       // px a link likes to be
+    repulsion: 2.9,  // every blob pushes every other away
+    friction: 7.3,   // damping for linked blobs; higher settles calmer
+    centerPull: 0.35 // drift toward the middle of the board
   }
 };

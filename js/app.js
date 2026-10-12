@@ -21,10 +21,6 @@
   ];
   const TOP = 78;            // board space kept clear for the search bar
   const GAP = 12;            // minimum air between blobs
-  const STRING_K = 0.018;    // pull of a connection stretched past its rest length
-  const PUSH_K = 0.012;      // push of a connection squeezed shorter than its rest length
-  const ROOM = 60;           // blobs closer than this (edge to edge) gently nudge each other apart
-  const ROOM_K = 0.03;
 
   const $ = (s) => document.querySelector(s);
   const stage = $("#stage"), board = $("#board"), svg = $("#edges"), blobsEl = $("#blobs"), menuEl = $("#menu");
@@ -46,7 +42,6 @@
   let W = 1000, H = 700, SC = 1;
   const view = { s: 1, x: 0, y: 0 };  // on-screen transform of the board
   const P = {};      // live positions for the current map: id -> {x, y, vx, vy, r}
-  const REST = {};   // edge id -> rest length; connections act like springs (pull when long, push when short)
   let drag = null, press = null, connect = null, stack = [];
   let simOn = false;
   let revealOn = false;
@@ -129,7 +124,6 @@
   }
   function placeFromData() {
     for (const k of Object.keys(P)) delete P[k];
-    for (const k of Object.keys(REST)) delete REST[k];
     for (const b of map().blobs) {
       const p = { x: toX(b.u), y: toY(b.v), vx: 0, vy: 0, r: b.s / 2 };
       const bd = bounds(p);
@@ -307,7 +301,10 @@
   function tick(ts) {
     const dt = lastTs ? Math.min(0.033, (ts - lastTs) / 1000) : 1 / 60;
     lastTs = ts;
-    const ids = Object.keys(P), fl = F.fling;
+    const ids = Object.keys(P), fl = F.fling, sp = F.springs;
+    const linked = new Set();
+    for (const e of map().edges) { linked.add(e.from); linked.add(e.to); }
+    const cx = W / 2, cy = TOP + (H - TOP) / 2, gx = sp.centerPull * Math.sqrt(H / W), gy = sp.centerPull * Math.sqrt(W / H);
     let active = !!drag;
     const dragP = drag && P[drag.id];
     if (dragP) {   // a dragged blob shoves what it meets, so give it the velocity of the hand
@@ -319,9 +316,8 @@
         const a = P[ids[i]], b = P[ids[j]];
         let dx = b.x - a.x, dy = b.y - a.y, d = Math.hypot(dx, dy);
         const aFixed = drag && drag.id === ids[i], bFixed = drag && drag.id === ids[j];
-        const room = a.r + b.r + ROOM;
-        if (d < room && d > 0.01) {
-          const f = ROOM_K * (room - d) / ROOM * 3600 * dt, nx0 = dx / d, ny0 = dy / d;
+        if (d > 0.01) {   // every blob pushes every other away a little, so a map spreads out
+          const f = sp.repulsion * 1.6e6 / Math.max(d * d, 400) * dt, nx0 = dx / d, ny0 = dy / d;
           if (!aFixed) { a.vx -= nx0 * f; a.vy -= ny0 * f; }
           if (!bFixed) { b.vx += nx0 * f; b.vy += ny0 * f; }
         }
@@ -351,9 +347,7 @@
       const a = P[e.from], b = P[e.to];
       if (!a || !b) continue;
       const dx = b.x - a.x, dy = b.y - a.y, d = Math.hypot(dx, dy) || 1;
-      if (REST[e.id] == null) REST[e.id] = clamp(d, a.r + b.r + 40, 340);
-      const stretch = d - REST[e.id];
-      const f = stretch * (stretch > 0 ? STRING_K : PUSH_K) * 3600 * dt, nx = dx / d, ny = dy / d;
+      const f = sp.strength * (d - sp.rest) * dt, nx = dx / d, ny = dy / d;   // a spring: pulls when long, pushes when short
       const aFixed = drag && drag.id === e.from, bFixed = drag && drag.id === e.to;
       if (!aFixed) { a.vx += nx * f; a.vy += ny * f; }
       if (!bFixed) { b.vx -= nx * f; b.vy -= ny * f; }
@@ -361,11 +355,13 @@
     for (const id of ids) {
       const p = P[id];
       if (!(drag && drag.id === id)) {
-        // fling: exponential friction plus a little grip, so slow glides really stop
-        const sp = Math.hypot(p.vx, p.vy);
-        if (sp > 0) {
-          const ns = Math.max(0, sp * Math.exp(-fl.friction * dt) - 22 * fl.friction * dt);
-          p.vx *= ns / sp; p.vy *= ns / sp;
+        p.vx += (cx - p.x) * gx * dt; p.vy += (cy - p.y) * gy * dt;   // gentle pull toward the middle
+        // friction: linked blobs settle calmly (spring friction); loose ones glide a little and stay (fling friction),
+        // with a little extra grip so slow glides really stop. Linked blobs get no grip, or springs would stick short of rest.
+        const isLinked = linked.has(id), fr = isLinked ? sp.friction : fl.friction, v0 = Math.hypot(p.vx, p.vy);
+        if (v0 > 0) {
+          const ns = Math.min(2600, Math.max(0, v0 * Math.exp(-fr * dt) - (isLinked ? 0 : 22 * fr * dt)));
+          p.vx *= ns / v0; p.vy *= ns / v0;
         }
         p.x += p.vx * dt; p.y += p.vy * dt;
         const bd = bounds(p), e = fl.bounce;
@@ -373,15 +369,15 @@
         if (p.x > bd.x1) { p.x = bd.x1; if (p.vx > 0) { if (p.vx > 30) kick(id, -1, 0, fl.squash * p.vx * 0.0052); p.vx = -p.vx * e; } }
         if (p.y < bd.y0) { p.y = bd.y0; if (p.vy < 0) { if (-p.vy > 30) kick(id, 0, 1, fl.squash * -p.vy * 0.0052); p.vy = -p.vy * e; } }
         if (p.y > bd.y1) { p.y = bd.y1; if (p.vy > 0) { if (p.vy > 30) kick(id, 0, -1, fl.squash * p.vy * 0.0052); p.vy = -p.vy * e; } }
-        if (Math.hypot(p.vx, p.vy) > 3) active = true; else { p.vx = 0; p.vy = 0; }
+        if (Math.hypot(p.vx, p.vy) > 3) active = true; else if (!isLinked) { p.vx = 0; p.vy = 0; }
       }
       const dm = D[id];
       if (dm) {   // squash and stretch: a damped spring toward a gentle stretch along the direction of travel
-        const sp = Math.hypot(p.vx, p.vy);
+        const spd = Math.hypot(p.vx, p.vy);
         let t1 = 0, t2 = 0;
-        if (sp > 1 && !RM.matches) {
-          const m = fl.squash * 0.13 * Math.tanh(sp / 1300), cx = p.vx / sp, cy = p.vy / sp;
-          t1 = (cx * cx - cy * cy) * m; t2 = 2 * cx * cy * m;
+        if (spd > 1 && !RM.matches) {
+          const m = fl.squash * 0.13 * Math.tanh(spd / 1300), ux = p.vx / spd, uy = p.vy / spd;
+          t1 = (ux * ux - uy * uy) * m; t2 = 2 * ux * uy * m;
         }
         const w = 2 * Math.PI * 4.2, z = 0.2;
         dm.u1 += (w * w * (t1 - dm.e1) - 2 * z * w * dm.u1) * dt;
@@ -389,13 +385,17 @@
         dm.e1 += dm.u1 * dt; dm.e2 += dm.u2 * dt;
         const m = Math.hypot(dm.e1, dm.e2);
         if (m > 0.45) { dm.e1 *= 0.45 / m; dm.e2 *= 0.45 / m; }
-        if (m < 0.003 && Math.hypot(dm.u1, dm.u2) < 0.05 && sp < 1) delete D[id]; else active = true;
+        if (m < 0.003 && Math.hypot(dm.u1, dm.u2) < 0.05 && spd < 1) delete D[id]; else active = true;
       }
     }
     draw();
     if (connect && !connect.type) placeMenu();
     if (active) requestAnimationFrame(tick);
-    else { simOn = false; writeBack(); }
+    else {
+      simOn = false;
+      for (const id of ids) { P[id].vx = 0; P[id].vy = 0; }
+      writeBack();
+    }
   }
 
   // ---------- pointer: drag, click, long-press ----------

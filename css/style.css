@@ -56,8 +56,11 @@ button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 2.5
 .ghost:hover { background: color-mix(in srgb, var(--c) 26%, transparent); }
 
 /* link feedback: a response, not a grade */
-#edges line.edge-wobble { transform-box: fill-box; transform-origin: center; animation: edgeWobble .7s ease-out; }
-@keyframes edgeWobble { 0% { transform: rotate(0) } 20% { transform: rotate(4deg) } 45% { transform: rotate(-3deg) } 70% { transform: rotate(1.5deg) } 100% { transform: rotate(0) } }
+#edges .edge-note {
+  font: 600 11.5px var(--font); fill: var(--soft); text-anchor: middle; pointer-events: none;
+  paint-order: stroke; stroke: var(--paper); stroke-width: 4px; stroke-linejoin: round;
+}
+.conn .oth.off { color: var(--faint); font-size: 12px; }
 #edges line.edge-ok { animation: edgeOk .5s ease-out; }
 @keyframes edgeOk { from { stroke-width: 16px; } }
 .blob { -webkit-touch-callout: none; }
@@ -289,5 +292,5 @@ body.panel-open .switcher { right: 358px; }
 
 /* reduced motion: no decorative movement. The hold ring still fills, since it shows progress. */
 @media (prefers-reduced-motion: reduce) {
-  .blob.wiggle, .blob.enter, .ghost, .puck, #edges line.edge-wobble { animation: none; }
+  .blob.wiggle, .blob.enter, .ghost, .puck, #edges line.edge-ok { animation: none; }
 }

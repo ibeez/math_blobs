@@ -34,5 +34,11 @@ window.MB_FEEL = {
     material: "mochi",
     // [stiffness, wobble time, tension] multipliers. Mochi is slow and sticky: it returns without wobbling.
     materials: { jelly: [1, 1, 1], rubber: [1.7, 0.4, 1.8], mochi: [0.55, 0.28, 0.6] }
+  },
+  // Pressing "check my links". A link in the key pops; one that is not shivers, then stays and is labelled.
+  feedback: {
+    pop: 0.5,        // size of the pop on a link that is in the key (links in the key never shiver)
+    shiverAmp: 5,    // px, how far the target blob shakes
+    shiverSecs: 1.45 // how long it shivers
   }
 };

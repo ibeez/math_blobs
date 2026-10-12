@@ -151,6 +151,7 @@
     temp.id = "tempEdge"; temp.setAttribute("stroke-linecap", "round"); temp.setAttribute("opacity", "0.75"); temp.style.display = "none";
     svg.appendChild(temp);
     for (const b of m.blobs) blobsEl.appendChild(blobEl(b));
+    renderNotes();
     renderGhosts();
     renderSummary();
     if (!m.blobs.length) {
@@ -195,6 +196,18 @@
     const cut = t.symmetric ? 0 : Math.min(b.r + 3, d / 2);
     l.setAttribute("x1", a.x); l.setAttribute("y1", a.y);
     l.setAttribute("x2", a.x + (b.x - a.x) * (d - cut) / d); l.setAttribute("y2", a.y + (b.y - a.y) * (d - cut) / d);
+  }
+  // Links that were checked and are not in the reference chart stay on the map with a small label.
+  function renderNotes() {
+    for (const n of svg.querySelectorAll(".edge-note")) n.remove();
+    if (isKey()) return;
+    for (const e of map().edges) {
+      if (!e.off) continue;
+      const t = document.createElementNS(SVGNS, "text");
+      t.classList.add("edge-note"); t.dataset.note = e.id;
+      t.textContent = "not in the reference chart";
+      svg.appendChild(t);
+    }
   }
   function edgeEl(e) {
     const t = typeOf(e.type);
@@ -241,8 +254,11 @@
   function draw() {
     for (const el of blobsEl.children) {
       const p = P[el.dataset.id]; if (!p) continue;
-      let t = `translate(${p.x - p.r}px, ${p.y - p.r}px)`;
       const d = D[el.dataset.id], m = d ? Math.hypot(d.e1, d.e2) : 0;
+      let sx = 0;
+      if (d && d.shake) { const tt = (performance.now() - d.shake.t0) / 1000, e = Math.max(0, 1 - tt * 1000 / d.shake.dur); sx = d.shake.amp * Math.sin(2 * Math.PI * 6.5 * tt) * e * e; }
+      let t = `translate(${p.x - p.r + sx}px, ${p.y - p.r}px)`;
+      if (d && Math.abs(d.s) > 0.003) t += ` scale(${1 + d.s})`;
       // low plumpness: a dented blob loses a little volume
       if (m > 0.004) { const a = Math.atan2(d.e2, d.e1) / 2, area = 1 - 0.12 * (1 - JG.plump) * Math.min(1, m / 0.45); t += ` rotate(${a}rad) scale(${Math.exp(m / 2) * area}, ${Math.exp(-m / 2) * area}) rotate(${-a}rad)`; }
       el.style.transform = t;
@@ -258,6 +274,12 @@
       if (!a || !b) { l.style.display = "none"; continue; }
       l.style.display = "";
       place(l, a, b, l.dataset.type);
+    }
+    for (const t of svg.querySelectorAll(".edge-note")) {
+      const e = map().edges.find((x) => x.id == t.dataset.note);
+      const a = e && P[e.from], b = e && P[e.to];
+      if (!a || !b) continue;
+      t.setAttribute("x", (a.x + b.x) / 2); t.setAttribute("y", (a.y + b.y) / 2 - 8);
     }
     const temp = $("#tempEdge");
     if (temp) {
@@ -300,8 +322,21 @@
   // Dent a blob along (nx, ny); it springs back. amt is in squash units (lab: kick).
   function kick(id, nx, ny, amt) {
     if (RM.matches || !P[id]) return;
-    const d = D[id] || (D[id] = { e1: 0, e2: 0, u1: 0, u2: 0 });
+    const d = dentOf(id);
     d.u1 -= (nx * nx - ny * ny) * amt; d.u2 -= 2 * nx * ny * amt;
+  }
+  const dentOf = (id) => D[id] || (D[id] = { e1: 0, e2: 0, u1: 0, u2: 0, s: 0, sv: 0, shake: null });
+  // Pop: the blob swells a little and settles back. size 0.5 swells it about 15%.
+  function popBlob(id, size) {
+    if (RM.matches || !P[id]) return;
+    dentOf(id).sv += 0.3 * size * J_OMEGA * Math.E;
+    startSim();
+  }
+  // Shiver: a quick head-shake that dies away.
+  function shiver(id) {
+    if (RM.matches || !P[id]) return;
+    dentOf(id).shake = { t0: performance.now(), dur: F.feedback.shiverSecs * 1000, amp: F.feedback.shiverAmp * 0.55 };
+    startSim();
   }
   // A poke: dent the blob toward the point touched. Peak dent is about half the squash setting.
   function poke(id, w, power = 1) {
@@ -394,9 +429,11 @@
         dm.u1 += (J_OMEGA * J_OMEGA * (t1 - dm.e1) - J_DAMP * dm.u1) * dt;
         dm.u2 += (J_OMEGA * J_OMEGA * (t2 - dm.e2) - J_DAMP * dm.u2) * dt;
         dm.e1 += dm.u1 * dt; dm.e2 += dm.u2 * dt;
+        dm.sv += (J_OMEGA * J_OMEGA * -dm.s - J_DAMP * dm.sv) * dt; dm.s += dm.sv * dt;
+        if (dm.shake && ts - dm.shake.t0 > dm.shake.dur) dm.shake = null;
         const m = Math.hypot(dm.e1, dm.e2);
         if (m > 0.45) { dm.e1 *= 0.45 / m; dm.e2 *= 0.45 / m; }
-        if (m < 0.003 && Math.hypot(dm.u1, dm.u2) < 0.05 && spd < 1) delete D[id]; else active = true;
+        if (m < 0.003 && Math.hypot(dm.u1, dm.u2) < 0.05 && spd < 1 && Math.abs(dm.s) < 0.003 && Math.abs(dm.sv) < 0.05 && !dm.shake) delete D[id]; else active = true;
       }
     }
     draw();
@@ -693,7 +730,7 @@
           ? `background-image:repeating-linear-gradient(90deg,${ty.c} 0 ${seg}px,transparent ${seg}px ${seg + gap}px)`
           : `background:${ty.c}`;
         h += `<div class="conn"><div class="swatch" style="height:${ty.w > 8 ? 8 : 5}px;${swatch}"></div>
-          <div class="txt"><div class="lbl">${out ? ty.label : ty.back}</div>
+          <div class="txt"><div class="lbl">${out ? ty.label : ty.back}</div>${e.off && !isKey() ? `<div class="oth off">not in the reference chart</div>` : ""}
           <div class="oth">${out ? "→" : "←"} <button data-term="${esc(other)}">${esc(S.terms[other].name)}</button></div>
 </div>
           ${isKey() ? `<button class="tier${e.tier === "valid" ? " valid" : ""}" data-tier="${e.id}" title="Core links appear in the reveal; valid links are accepted but never revealed">${e.tier === "valid" ? "valid" : "core"}</button>` : ""}
@@ -1114,7 +1151,13 @@
     const edges = map().edges;
     if (!edges.length) return say("Draw some links first, then check.");
     let ok = 0;
-    for (const e of edges) { const good = !!keyMatch(e); if (good) ok++; edgeFx(e.id, good ? "edge-ok" : "edge-wobble"); }
+    for (const e of edges) {
+      const good = !!keyMatch(e);
+      e.off = !good;
+      if (good) { ok++; edgeFx(e.id, "edge-ok"); popBlob(e.to, F.feedback.pop); popBlob(e.from, F.feedback.pop * 0.55); }
+      else shiver(e.to);   // a link not in the chart: the target shivers, the link stays
+    }
+    save(); renderNotes(); draw();
     resetCheckBtn();
     if (ok < edges.length) {
       const b = $("#checkBtn");
@@ -1124,7 +1167,7 @@
       delTimer = setTimeout(resetCheckBtn, 5000);
     }
     const missing = missedCoreLinks().length;
-    say(`${ok} of ${edges.length} links match the chart${ok < edges.length ? ", the wobbling ones do not" : ""}. ${missing ? `${missing} chart link${missing > 1 ? "s are" : " is"} still missing.` : "None are missing."}`);
+    say(`${ok} of ${edges.length} links match the chart${ok < edges.length ? ", the labelled ones do not" : ""}. ${missing ? `${missing} chart link${missing > 1 ? "s are" : " is"} still missing.` : "None are missing."}`);
   });
   $("#hintBtn").addEventListener("click", hint);
   $("#revealBtn").addEventListener("click", () => toggleReveal());

@@ -4,6 +4,8 @@
   // ---------- constants ----------
   const STORE_KEY = "mathblobs.v3";   // v3: student work kept apart from the answer keys; old saves are ignored
   const TYPES = window.MB_DEMO.linkTypes;
+  const F = window.MB_FEEL;
+  const RM = window.matchMedia("(prefers-reduced-motion: reduce)");   // live: RM.matches
   const DEFAULT_TYPES = ["special", "needs", "same", "contrasts"];
   const FALLBACK_TYPE = { label: "linked to", back: "linked to", short: "linked", c: "#A8A294", w: 5, dash: null };
   const typeOf = (k) => TYPES[k] || FALLBACK_TYPE;
@@ -372,7 +374,7 @@
     el.classList.add("holding");
     press.timer = setTimeout(() => {
       if (press && !press.moved) { press.long = true; el.classList.remove("holding"); openConnect(id); }
-    }, 500);
+    }, F.hold.ms);
     el.setPointerCapture(e.pointerId);
   }
   // Pull a ghost in: it becomes the student's own blob, already in hand.
@@ -396,7 +398,7 @@
       if (puck) chooseType(puck.dataset.type, e);
       return;
     }
-    if (!press.moved && Math.hypot(e.clientX - press.sx, e.clientY - press.sy) < 5) return;
+    if (!press.moved && Math.hypot(e.clientX - press.sx, e.clientY - press.sy) < F.hold.thresh) return;
     if (!press.moved) {
       press.moved = true; clearTimeout(press.timer); press.el.classList.remove("holding");
       if (connect) closeConnect();
@@ -467,7 +469,7 @@
       const b = document.createElement("button");
       b.className = "puck";
       b.dataset.type = k;
-      b.style.animationDelay = i * 45 + "ms";
+      b.style.animationDelay = i * 35 + "ms";
       b.innerHTML = `<span class="dot" style="background:${t.c}"></span>${t.short}`;
       b.title = t.label;
       b.addEventListener("pointerdown", (e) => {
@@ -497,12 +499,12 @@
     const sizes = pucks.map((p) => ({ w: p.offsetWidth || 100, h: 34 }));
     const others = Object.entries(P).filter(([k]) => k !== connect.from).map(([, p]) => p);
     let best = null;
-    for (const extra of [34, 46, 60]) {
+    for (const extra of [0, 12, 26]) {   // pucks sit menuR from the blob's centre; step outward only if crowded
       const step = 360 / Math.max(1, sizes.length);
       for (let rot = 0; rot < step; rot += 6) {
         const rects = sizes.map((s, i) => {
           const a = (rot + step / 2 + i * step) * Math.PI / 180;
-          const rad = c.r + extra + Math.abs(Math.cos(a)) * (s.w / 2 - 17);
+          const rad = F.hold.menuR + extra + Math.abs(Math.cos(a)) * (s.w / 2 - 17);
           const x = c.x + Math.cos(a) * rad - s.w / 2, y = c.y + Math.sin(a) * rad - s.h / 2;
           return { x, y, w: s.w, h: s.h };
         });
@@ -1137,6 +1139,23 @@
   });
 
   // ---------- boot ----------
+  // Feel settings that CSS needs. The menu pop is a damped spring (omega 24 rad/s, as in the lab), written out as a linear() easing.
+  function springEase(zeta, omega, secs) {
+    const wd = omega * Math.sqrt(1 - zeta * zeta), pts = [];
+    for (let i = 0; i <= 24; i++) {
+      const t = secs * i / 24, e = Math.exp(-zeta * omega * t);
+      pts.push((1 - e * (Math.cos(wd * t) + zeta * omega / wd * Math.sin(wd * t))).toFixed(4));
+    }
+    pts[24] = "1";
+    return `linear(${pts.join(", ")})`;
+  }
+  {
+    const st = document.documentElement.style, zeta = 1 - 0.8 * F.hold.spring;   // lab: lerp(1, 0.2, springiness)
+    st.setProperty("--ring-w", F.hold.ring + "px");
+    st.setProperty("--hold-ms", F.hold.ms + "ms");
+    st.setProperty("--pop-dur", "0.45s");
+    st.setProperty("--pop-ease", springEase(Math.min(zeta, 0.999), 24, 0.45));
+  }
   S = load();
   const startMap = decodeURIComponent(location.hash.slice(1));
   if (S.maps[startMap]) S.current = startMap;

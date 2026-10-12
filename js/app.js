@@ -21,8 +21,6 @@
   ];
   const TOP = 78;            // board space kept clear for the search bar
   const GAP = 12;            // minimum air between blobs
-  const FRICTION = 0.935;    // per frame; lower = stops sooner
-  const BOUNCE = 0.55;
   const STRING_K = 0.018;    // pull of a connection stretched past its rest length
   const PUSH_K = 0.012;      // push of a connection squeezed shorter than its rest length
   const ROOM = 60;           // blobs closer than this (edge to edge) gently nudge each other apart
@@ -249,7 +247,10 @@
   function draw() {
     for (const el of blobsEl.children) {
       const p = P[el.dataset.id]; if (!p) continue;
-      el.style.transform = `translate(${p.x - p.r}px, ${p.y - p.r}px)`;
+      let t = `translate(${p.x - p.r}px, ${p.y - p.r}px)`;
+      const d = D[el.dataset.id], m = d ? Math.hypot(d.e1, d.e2) : 0;
+      if (m > 0.004) { const a = Math.atan2(d.e2, d.e1) / 2; t += ` rotate(${a}rad) scale(${Math.exp(m / 2)}, ${Math.exp(-m / 2)}) rotate(${-a}rad)`; }
+      el.style.transform = t;
     }
     for (const l of svg.querySelectorAll("line[data-edge]")) {
       const e = map().edges.find((x) => x.id == l.dataset.edge);
@@ -288,29 +289,58 @@
   }
 
   // ---------- physics: momentum, soft collisions, edge bounce ----------
+  // Velocities are px/s and every step uses real elapsed time, so it feels the same at 60 and 120 Hz.
+  const D = {};              // squash and stretch per blob: id -> {e1, e2, u1, u2} (amount and its rate)
+  const touching = new Set();
+  let lastTs = 0;
   function startSim() {
     if (simOn) return;
-    simOn = true;
+    simOn = true; lastTs = 0;
     requestAnimationFrame(tick);
   }
-  function tick() {
-    const ids = Object.keys(P);
+  // Dent a blob along (nx, ny); it springs back. amt is in squash units (lab: kick).
+  function kick(id, nx, ny, amt) {
+    if (RM.matches || !P[id]) return;
+    const d = D[id] || (D[id] = { e1: 0, e2: 0, u1: 0, u2: 0 });
+    d.u1 -= (nx * nx - ny * ny) * amt; d.u2 -= 2 * nx * ny * amt;
+  }
+  function tick(ts) {
+    const dt = lastTs ? Math.min(0.033, (ts - lastTs) / 1000) : 1 / 60;
+    lastTs = ts;
+    const ids = Object.keys(P), fl = F.fling;
     let active = !!drag;
+    const dragP = drag && P[drag.id];
+    if (dragP) {   // a dragged blob shoves what it meets, so give it the velocity of the hand
+      if (dragP.lx != null) { dragP.vx = (dragP.x - dragP.lx) / dt; dragP.vy = (dragP.y - dragP.ly) / dt; }
+      dragP.lx = dragP.x; dragP.ly = dragP.y;
+    }
     for (let i = 0; i < ids.length; i++) {
       for (let j = i + 1; j < ids.length; j++) {
         const a = P[ids[i]], b = P[ids[j]];
         let dx = b.x - a.x, dy = b.y - a.y, d = Math.hypot(dx, dy);
+        const aFixed = drag && drag.id === ids[i], bFixed = drag && drag.id === ids[j];
         const room = a.r + b.r + ROOM;
         if (d < room && d > 0.01) {
-          const f = ROOM_K * (room - d) / ROOM, nx0 = dx / d, ny0 = dy / d;
-          if (!(drag && drag.id === ids[i])) { a.vx -= nx0 * f; a.vy -= ny0 * f; }
-          if (!(drag && drag.id === ids[j])) { b.vx += nx0 * f; b.vy += ny0 * f; }
+          const f = ROOM_K * (room - d) / ROOM * 3600 * dt, nx0 = dx / d, ny0 = dy / d;
+          if (!aFixed) { a.vx -= nx0 * f; a.vy -= ny0 * f; }
+          if (!bFixed) { b.vx += nx0 * f; b.vy += ny0 * f; }
         }
-        const min = a.r + b.r + GAP;
-        if (d >= min) continue;
+        const min = a.r + b.r + GAP, key = ids[i] + "|" + ids[j];
+        if (d >= min) { touching.delete(key); continue; }
         if (d < 0.01) { dx = Math.random() - 0.5; dy = Math.random() - 0.5; d = Math.hypot(dx, dy); }
         const push = (min - d), nx = dx / d, ny = dy / d;
-        const aFixed = drag && drag.id === ids[i], bFixed = drag && drag.id === ids[j];
+        // momentum: what is closing in at the contact is shared out, scaled by "blob push"
+        const vn = (b.vx - a.vx) * nx + (b.vy - a.vy) * ny;
+        const ia = aFixed ? 0 : 1, ib = bFixed ? 0 : 1, both = ia + ib;
+        if (vn < 0 && both) {
+          const j2 = -vn * (1 + fl.bounce) / 2 * fl.push * 2;
+          a.vx -= nx * j2 * ia / both; a.vy -= ny * j2 * ia / both;
+          b.vx += nx * j2 * ib / both; b.vy += ny * j2 * ib / both;
+        }
+        if (!touching.has(key)) {
+          touching.add(key);
+          if (vn < -60) { kick(ids[i], nx, ny, fl.squash * -vn * 0.55 * 0.0052); kick(ids[j], nx, ny, fl.squash * -vn * 0.55 * 0.0052); }
+        }
         const sa = aFixed ? 0 : bFixed ? 1 : 0.5, sb = bFixed ? 0 : aFixed ? 1 : 0.5;
         a.x -= nx * push * sa * 0.5; a.y -= ny * push * sa * 0.5;
         b.x += nx * push * sb * 0.5; b.y += ny * push * sb * 0.5;
@@ -323,22 +353,44 @@
       const dx = b.x - a.x, dy = b.y - a.y, d = Math.hypot(dx, dy) || 1;
       if (REST[e.id] == null) REST[e.id] = clamp(d, a.r + b.r + 40, 340);
       const stretch = d - REST[e.id];
-      const f = stretch * (stretch > 0 ? STRING_K : PUSH_K), nx = dx / d, ny = dy / d;
+      const f = stretch * (stretch > 0 ? STRING_K : PUSH_K) * 3600 * dt, nx = dx / d, ny = dy / d;
       const aFixed = drag && drag.id === e.from, bFixed = drag && drag.id === e.to;
       if (!aFixed) { a.vx += nx * f; a.vy += ny * f; }
       if (!bFixed) { b.vx -= nx * f; b.vy -= ny * f; }
     }
     for (const id of ids) {
       const p = P[id];
-      if (drag && drag.id === id) continue;
-      p.x += p.vx; p.y += p.vy;
-      p.vx *= FRICTION; p.vy *= FRICTION;
-      const bd = bounds(p);
-      if (p.x < bd.x0) { p.x = bd.x0; p.vx = Math.abs(p.vx) * BOUNCE; }
-      if (p.x > bd.x1) { p.x = bd.x1; p.vx = -Math.abs(p.vx) * BOUNCE; }
-      if (p.y < bd.y0) { p.y = bd.y0; p.vy = Math.abs(p.vy) * BOUNCE; }
-      if (p.y > bd.y1) { p.y = bd.y1; p.vy = -Math.abs(p.vy) * BOUNCE; }
-      if (Math.hypot(p.vx, p.vy) > 0.04) active = true; else { p.vx = 0; p.vy = 0; }
+      if (!(drag && drag.id === id)) {
+        // fling: exponential friction plus a little grip, so slow glides really stop
+        const sp = Math.hypot(p.vx, p.vy);
+        if (sp > 0) {
+          const ns = Math.max(0, sp * Math.exp(-fl.friction * dt) - 22 * fl.friction * dt);
+          p.vx *= ns / sp; p.vy *= ns / sp;
+        }
+        p.x += p.vx * dt; p.y += p.vy * dt;
+        const bd = bounds(p), e = fl.bounce;
+        if (p.x < bd.x0) { p.x = bd.x0; if (p.vx < 0) { if (-p.vx > 30) kick(id, 1, 0, fl.squash * -p.vx * 0.0052); p.vx = -p.vx * e; } }
+        if (p.x > bd.x1) { p.x = bd.x1; if (p.vx > 0) { if (p.vx > 30) kick(id, -1, 0, fl.squash * p.vx * 0.0052); p.vx = -p.vx * e; } }
+        if (p.y < bd.y0) { p.y = bd.y0; if (p.vy < 0) { if (-p.vy > 30) kick(id, 0, 1, fl.squash * -p.vy * 0.0052); p.vy = -p.vy * e; } }
+        if (p.y > bd.y1) { p.y = bd.y1; if (p.vy > 0) { if (p.vy > 30) kick(id, 0, -1, fl.squash * p.vy * 0.0052); p.vy = -p.vy * e; } }
+        if (Math.hypot(p.vx, p.vy) > 3) active = true; else { p.vx = 0; p.vy = 0; }
+      }
+      const dm = D[id];
+      if (dm) {   // squash and stretch: a damped spring toward a gentle stretch along the direction of travel
+        const sp = Math.hypot(p.vx, p.vy);
+        let t1 = 0, t2 = 0;
+        if (sp > 1 && !RM.matches) {
+          const m = fl.squash * 0.13 * Math.tanh(sp / 1300), cx = p.vx / sp, cy = p.vy / sp;
+          t1 = (cx * cx - cy * cy) * m; t2 = 2 * cx * cy * m;
+        }
+        const w = 2 * Math.PI * 4.2, z = 0.2;
+        dm.u1 += (w * w * (t1 - dm.e1) - 2 * z * w * dm.u1) * dt;
+        dm.u2 += (w * w * (t2 - dm.e2) - 2 * z * w * dm.u2) * dt;
+        dm.e1 += dm.u1 * dt; dm.e2 += dm.u2 * dt;
+        const m = Math.hypot(dm.e1, dm.e2);
+        if (m > 0.45) { dm.e1 *= 0.45 / m; dm.e2 *= 0.45 / m; }
+        if (m < 0.003 && Math.hypot(dm.u1, dm.u2) < 0.05 && sp < 1) delete D[id]; else active = true;
+      }
     }
     draw();
     if (connect && !connect.type) placeMenu();
@@ -376,6 +428,8 @@
       if (press && !press.moved) { press.long = true; el.classList.remove("holding"); openConnect(id); }
     }, F.hold.ms);
     el.setPointerCapture(e.pointerId);
+    kick(id, 1, 0, 2.5 * F.fling.squash);   // a tiny squeeze says "got you"
+    startSim();
   }
   // Pull a ghost in: it becomes the student's own blob, already in hand.
   function pullGhost(id, e) {
@@ -431,13 +485,17 @@
     pr.el.classList.remove("holding");
     if (pr.moved) {
       pr.el.classList.remove("dragging");
-      const s = pr.samples, p = P[pr.id];
+      const p = P[pr.id], now = performance.now(), s = pr.samples.filter((q) => now - q.t < 90);
+      let vx = 0, vy = 0;
       if (s.length >= 2) {
-        const a = s[0], b = s[s.length - 1], dt = Math.max(8, b.t - a.t);
-        const recent = performance.now() - b.t < 80;
-        p.vx = recent ? clamp((b.x - a.x) / dt * 16.7, -45, 45) : 0;
-        p.vy = recent ? clamp((b.y - a.y) / dt * 16.7, -45, 45) : 0;
+        const a = s[0], z = s[s.length - 1], dt = (z.t - a.t) / 1000;
+        if (dt > 0.008 && now - z.t < 50) { vx = (z.x - a.x) / dt; vy = (z.y - a.y) / dt; }
       }
+      // placing is not flinging: slow releases fade to a dead stop; fast ones are capped
+      const sp = Math.hypot(vx, vy), k = clamp((sp - 140) / 320, 0, 1);
+      const out = Math.min(F.fling.maxSpeed, sp) * k * k * (3 - 2 * k);
+      p.vx = sp ? vx * out / sp : 0; p.vy = sp ? vy * out / sp : 0;
+      p.lx = null;
       drag = null;
       startSim();
       return;
@@ -851,7 +909,7 @@
     const m = map();
     const cx = W / 2 + (Math.random() - 0.5) * 160, cy = TOP + (H - TOP) / 2 + (Math.random() - 0.5) * 120;
     m.blobs.push({ id, u: cx / W, v: (cy - TOP) / (H - TOP), s, c: color });
-    P[id] = { x: cx, y: cy, r: s / 2, vx: (Math.random() - 0.5) * 9, vy: (Math.random() - 0.5) * 9 };
+    P[id] = { x: cx, y: cy, r: s / 2, vx: (Math.random() - 0.5) * 270, vy: (Math.random() - 0.5) * 270 };
     save();
     renderMap();
     flash(id, "enter");

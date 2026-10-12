@@ -47,5 +47,13 @@ window.MB_FEEL = {
     overshoot: 1,    // how far past full size it swells on the way
     typo: 1,         // letters a typed term may be off by (longer terms are never allowed more)
     pulse: 0.5       // size of the swell when the term is already on the map
+  },
+  // "Show what's missing": ghosts of core terms and links, drawn on the student's own map.
+  ghosts: {
+    opacity: 0.5,    // how see-through a ghost is
+    drift: 8,        // px a ghost floats around
+    sketchSecs: 1,   // the outline draws itself ("sketch in"), then the fill and label fade up
+    materializeSecs: 1, // a ghost pulled onto the map fills in with colour over this long
+    dash: 8          // px, dash length of the outline
   }
 };

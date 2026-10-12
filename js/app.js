@@ -222,32 +222,69 @@
     return l;
   }
   // Reveal: ghost blobs for core terms not found yet, dashed lines for core links not drawn yet.
+  // The outline of each draws itself ("sketch in"); ones already drawn in this reveal just stay put.
+  const drawn = new Set();
+  const ghostMasks = new Map();   // dashed line -> the line in its mask that reveals it
+  let maskN = 0;
+  // The blob's CSS border-radius shape as an SVG path in a box of side s.
+  function shapePath(shape, s) {
+    const [h, v] = shape.split("/").map((t) => t.trim().split(/\s+/).map((x) => parseFloat(x) / 100 * s));
+    const [hx0, hx1, hx2, hx3] = h, [vy0, vy1, vy2, vy3] = v;   // corners: top-left, top-right, bottom-right, bottom-left
+    return `M${hx0} 0 H${s - hx1} A${hx1} ${vy1} 0 0 1 ${s} ${vy1} V${s - vy2} A${hx2} ${vy2} 0 0 1 ${s - hx2} ${s} H${hx3} A${hx3} ${vy3} 0 0 1 0 ${s - vy3} V${vy0} A${hx0} ${vy0} 0 0 1 ${hx0} 0 Z`;
+  }
+  function ghostEl(b, g, settled) {
+    const el = document.createElement("div"), s = b.s, d = shapePath(shapeFor(b.id), s), gd = F.ghosts.dash;
+    const mid = "gm" + maskN++;
+    el.className = "ghost" + (settled ? " settled" : "");
+    el.dataset.id = b.id;
+    el.title = "Drag it onto your map";
+    el.style.cssText = `width:${s}px;height:${s}px;--c:${b.c};transform:translate(${g.x - g.r}px,${g.y - g.r}px);` +
+      `--seed:${(Math.abs(shapeFor(b.id).length * 7 + b.id.length * 13) % 17) / 17}`;
+    el.innerHTML = `<svg class="g-svg" viewBox="0 0 ${s} ${s}" aria-hidden="true">
+      <mask id="${mid}" maskUnits="userSpaceOnUse" x="-10" y="-10" width="${s + 20}" height="${s + 20}"><path class="g-draw" d="${d}" pathLength="1"/></mask>
+      <path class="g-fill" d="${d}"/>
+      <path class="g-line" d="${d}" mask="url(#${mid})" stroke-dasharray="${gd} ${gd * 0.8}"/></svg><span class="g-label"></span>`;
+    el.querySelector(".g-label").textContent = S.terms[b.id].name;
+    return el;
+  }
   function renderGhosts() {
     ghostsEl.innerHTML = "";
+    ghostMasks.clear();
     for (const k of Object.keys(G)) delete G[k];
     for (const l of svg.querySelectorAll(".ghost-edge")) l.remove();
+    for (const m of svg.querySelectorAll("mask.ghost-mask")) m.remove();
     if (isKey()) return;
     const found = foundIds();
     for (const b of coreTerms()) {
       if (found.has(b.id) || !(revealOn || shown.has(b.id))) continue;
       const g = { x: toX(b.u), y: toY(b.v), r: b.s / 2 };
       G[b.id] = g;
-      const el = document.createElement("div");
-      el.className = "ghost";
-      el.dataset.id = b.id;
-      el.textContent = S.terms[b.id].name;
-      el.title = "Drag it onto your map";
-      el.style.cssText = `width:${b.s}px;height:${b.s}px;border-radius:${shapeFor(b.id)};--c:${b.c};transform:translate(${g.x - g.r}px,${g.y - g.r}px)`;
-      ghostsEl.appendChild(el);
+      ghostsEl.appendChild(ghostEl(b, g, drawn.has(b.id)));
+      drawn.add(b.id);
     }
     const first = svg.firstChild;
     for (const k of revealOn ? missedCoreLinks() : []) {
-      const t = typeOf(k.type), l = document.createElementNS(SVGNS, "line");
+      const t = typeOf(k.type), l = document.createElementNS(SVGNS, "line"), key = k.from + ">" + k.to + ":" + k.type;
       l.classList.add("ghost-edge");
+      if (drawn.has(key)) l.classList.add("settled");
+      drawn.add(key);
       l.dataset.from = k.from; l.dataset.to = k.to; l.dataset.type = k.type;
       if (!t.symmetric) l.setAttribute("marker-end", `url(#arrow-${k.type})`);
+      const gd = F.ghosts.dash;
       l.setAttribute("stroke", t.c); l.setAttribute("stroke-width", 4);
-      l.setAttribute("stroke-dasharray", "8 9"); l.setAttribute("stroke-linecap", "round");
+      l.setAttribute("stroke-dasharray", `${gd} ${gd * 0.8 + 1}`); l.setAttribute("stroke-linecap", "round");
+      // the mask draws the line on, from one end to the other
+      const mid = "gl" + maskN++, mask = document.createElementNS(SVGNS, "mask"), ml = document.createElementNS(SVGNS, "line");
+      mask.id = mid; mask.classList.add("ghost-mask");
+      mask.setAttribute("maskUnits", "userSpaceOnUse"); mask.setAttribute("x", -60); mask.setAttribute("y", -60);
+      mask.setAttribute("width", W + 120); mask.setAttribute("height", H + 120);
+      ml.setAttribute("stroke", "#fff"); ml.setAttribute("stroke-width", 40); ml.setAttribute("pathLength", 1);
+      ml.classList.add("ghost-draw");
+      if (drawn.has(key) && l.classList.contains("settled")) ml.classList.add("settled");
+      mask.appendChild(ml);
+      svg.insertBefore(mask, first);
+      l.setAttribute("mask", `url(#${mid})`);
+      ghostMasks.set(l, ml);
       svg.insertBefore(l, first);
     }
   }
@@ -274,6 +311,7 @@
       if (!a || !b) { l.style.display = "none"; continue; }
       l.style.display = "";
       place(l, a, b, l.dataset.type);
+      const ml = ghostMasks.get(l); if (ml) place(ml, a, b, l.dataset.type);
     }
     for (const t of svg.querySelectorAll(".edge-note")) {
       const e = map().edges.find((x) => x.id == t.dataset.note);
@@ -489,7 +527,18 @@
     save();
     renderMap();
     const el = blobNode(id);
-    if (el) beginPress(el, e);
+    if (el) { materialize(el, k.c); beginPress(el, e); }
+  }
+  // A ghost pulled onto the map fills in with colour from the bottom up.
+  function materialize(el, color) {
+    if (RM.matches) return;
+    const ink = el.style.color, ms = F.ghosts.materializeSecs * 1000;
+    el.animate([
+      { clipPath: "inset(100% 0 0 0)", color: "#6F6A5E", outline: `2.5px dashed ${color}`, offset: 0 },
+      { clipPath: "inset(100% 0 0 0)", color: "#6F6A5E", outline: `2.5px dashed ${color}`, offset: 0.15 },
+      { clipPath: "inset(-20% -20% -20% -20%)", color: "#6F6A5E", outline: `2.5px dashed ${color}`, offset: 0.8 },
+      { clipPath: "inset(-20% -20% -20% -20%)", color: ink, outline: "2.5px dashed transparent", offset: 1 }
+    ], { duration: ms, easing: "ease-in-out" });
   }
 
   window.addEventListener("pointermove", (e) => {
@@ -1125,13 +1174,80 @@
     const near = key.edges.map((k) => (k.from === b.id ? k.to : k.to === b.id ? k.from : null)).find((x) => x && found.has(x));
     say(`Hint: a term starting with “${S.terms[b.id].name[0].toUpperCase()}”${near ? `, connected to ${S.terms[near].name}` : ""}.`);
   }
-  function toggleReveal(force) {
-    if (TEST) return;
-    revealOn = force === undefined ? !revealOn : force;
+  // ---------- reveal: "show what's missing" ----------
+  const LOG_KEY = "mathblobs.log.v1";   // timestamped snapshots of the student map; there is no online change log yet
+  // Save a copy of the whole student map: every blob and every link, including links not in the key.
+  // Returns true only once the copy has been written and read back.
+  function snapshotMap(why) {
+    try {
+      if (simOn) writeBack();
+      const m = map(), at = new Date().toISOString();
+      const entry = {
+        id: at + "#" + S.current, at, why, lesson: S.current, title: lesson().title,
+        blobs: m.blobs.map((b) => ({ id: b.id, name: S.terms[b.id].name, extra: !!S.terms[b.id].extra, u: b.u, v: b.v, s: b.s, c: b.c })),
+        edges: m.edges.map((e) => ({ id: e.id, from: e.from, to: e.to, type: e.type, inKey: !!keyMatch(e) }))
+      };
+      const log = JSON.parse(localStorage.getItem(LOG_KEY) || "[]");
+      log.push(entry);
+      localStorage.setItem(LOG_KEY, JSON.stringify(log));
+      const back = JSON.parse(localStorage.getItem(LOG_KEY));
+      return Array.isArray(back) && back.length === log.length && back[back.length - 1].id === entry.id;
+    } catch (e) { return false; }
+  }
+  // Links that are not in the key get shaken off: both ends rattle, then the link falls away.
+  function shakeOff(bad, done) {
+    const gone = new Set(bad.map((e) => e.id));
+    let over = false;
+    const finish = () => {
+      if (over) return;
+      over = true;
+      map().edges = map().edges.filter((e) => !gone.has(e.id));
+      save(); renderMap();
+      if (panel.classList.contains("open")) renderPanel();
+      done();
+    };
+    if (RM.matches) return finish();
+    for (const e of bad) { shiver(e.from); shiver(e.to); }
+    setTimeout(() => {
+      for (const e of bad) {
+        const l = svg.querySelector(`line[data-edge="${e.id}"]`), n = svg.querySelector(`.edge-note[data-note="${e.id}"]`);
+        if (n) n.remove();
+        if (!l) continue;
+        l.style.transformBox = "fill-box"; l.style.transformOrigin = "center";
+        const dir = Math.random() < 0.5 ? -1 : 1;
+        l.animate([
+          { transform: "translateY(0) rotate(0)", opacity: 1 },
+          { transform: `translateY(${H * 0.5}px) rotate(${dir * 40}deg)`, opacity: 0 }
+        ], { duration: 700, easing: "cubic-bezier(.5, 0, 1, .6)", fill: "forwards" });
+      }
+      setTimeout(finish, 700);
+    }, 750);
+  }
+  let revealBusy = false;
+  function setRevealUI() {
     $("#revealBtn").textContent = revealOn ? "hide what's missing" : "show what's missing";
     $("#revealBtn").setAttribute("aria-pressed", String(revealOn));
+  }
+  function showGhosts() {
+    revealOn = true;
+    drawn.clear();
+    setRevealUI();
     renderMap();
-    if (revealOn && !Object.keys(G).length && !svg.querySelector(".ghost-edge")) say("Nothing missing: your map has every core term and link.");
+    if (!Object.keys(G).length && !svg.querySelector(".ghost-edge")) say("Nothing missing: your map has every core term and link.");
+  }
+  function toggleReveal(force) {
+    if (TEST || revealBusy) return;
+    const on = force === undefined ? !revealOn : force;
+    if (!on) { revealOn = false; drawn.clear(); setRevealUI(); renderMap(); return; }
+    if (revealOn) return;
+    // 1. Save a copy of the student's map. Nothing below runs unless this worked.
+    if (!snapshotMap("reveal")) { say("Could not save a copy of your map, so nothing was changed."); return; }
+    // 2. Shake off the links that are not in the key.
+    const bad = map().edges.filter((e) => !keyMatch(e));
+    if (!bad.length) return showGhosts();
+    // 3. Then sketch in the ghosts.
+    revealBusy = true;
+    shakeOff(bad, () => { revealBusy = false; showGhosts(); });
   }
   // Summary: a short paragraph for the lesson; its words only reveal a blob (a ghost to drag in), like the reveal does.
   function renderSummary() {
@@ -1290,6 +1406,9 @@
   }
   {
     const st = document.documentElement.style, zeta = 1 - 0.8 * F.hold.spring;   // lab: lerp(1, 0.2, springiness)
+    st.setProperty("--g-op", F.ghosts.opacity);
+    st.setProperty("--g-drift", F.ghosts.drift + "px");
+    st.setProperty("--g-sketch", F.ghosts.sketchSecs + "s");
     st.setProperty("--ring-w", F.hold.ring + "px");
     st.setProperty("--hold-ms", F.hold.ms + "ms");
     st.setProperty("--pop-dur", "0.45s");

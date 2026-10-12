@@ -46,14 +46,32 @@ button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 2.5
 @keyframes ringfill { from { --p: 0 } to { --p: 1 } }
 .blob.extra { outline: 2px dashed #B9B1A2; outline-offset: -6px; }
 
-/* reveal: ghosts of the core terms a student has not found */
+/* reveal: ghosts of the core terms a student has not found. The outline draws itself, then the fill and label fade up. */
+@property --dx { syntax: "<length>"; inherits: false; initial-value: 0px; }
+@property --dy { syntax: "<length>"; inherits: false; initial-value: 0px; }
 .ghost {
   position: absolute; left: 0; top: 0; display: flex; align-items: center; justify-content: center; text-align: center;
   padding: 8px; font: 600 13px/1.15 var(--font); color: var(--soft); cursor: grab; touch-action: none;
-  background: color-mix(in srgb, var(--c) 14%, transparent); border: 2.5px dashed color-mix(in srgb, var(--c) 70%, transparent);
-  animation: enter .45s cubic-bezier(.2, 1.4, .4, 1);
+  translate: var(--dx) var(--dy);
 }
-.ghost:hover { background: color-mix(in srgb, var(--c) 26%, transparent); }
+.ghost .g-svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
+.ghost .g-draw { fill: none; stroke: #fff; stroke-width: 10; stroke-dasharray: 1; stroke-dashoffset: 0; }
+.ghost .g-line { fill: none; stroke: var(--c); stroke-width: 2.5; stroke-linecap: round; stroke-opacity: min(1, calc(var(--g-op, .5) * 1.7)); }
+.ghost .g-fill { fill: var(--c); fill-opacity: calc(var(--g-op, .5) * .45); stroke: none; }
+.ghost .g-label { position: relative; opacity: min(1, calc(var(--g-op, .5) * 1.6)); }
+.ghost:not(.settled) .g-draw { animation: gdraw calc(var(--g-sketch, 1s) * .7) ease-in-out backwards; }
+.ghost:not(.settled) .g-fill { animation: gfade var(--g-sketch, 1s) ease-out backwards; }
+.ghost:not(.settled) .g-label { animation: gfade calc(var(--g-sketch, 1s) * .9) ease-out backwards; }
+@keyframes gdraw { from { stroke-dashoffset: 1 } }
+@keyframes gfade { 0%, 45% { opacity: 0; fill-opacity: 0 } }
+@keyframes gdriftx { from { --dx: calc(var(--g-drift, 8px) * -.7) } to { --dx: calc(var(--g-drift, 8px) * .7) } }
+@keyframes gdrifty { from { --dy: calc(var(--g-drift, 8px) * -1) } to { --dy: var(--g-drift, 8px) } }
+.ghost-draw { stroke-dasharray: 1; stroke-dashoffset: 0; }
+#edges .ghost-edge { opacity: .85; }
+@media (prefers-reduced-motion: no-preference) {
+  .ghost { animation: gdriftx 4.5s ease-in-out infinite alternate, gdrifty 3.3s ease-in-out infinite alternate; animation-delay: calc(var(--seed, 0) * -4.5s), calc(var(--seed, 0) * -3.3s); }
+  .ghost-draw:not(.settled) { animation: gdraw calc(var(--g-sketch, 1s) * .65) ease-in-out calc(var(--g-sketch, 1s) * .35) backwards; }
+}
 
 /* link feedback: a response, not a grade */
 #edges .edge-note {
@@ -292,5 +310,5 @@ body.panel-open .switcher { right: 358px; }
 
 /* reduced motion: no decorative movement. The hold ring still fills, since it shows progress. */
 @media (prefers-reduced-motion: reduce) {
-  .blob.wiggle, .blob.enter, .ghost, .puck, #edges line.edge-ok { animation: none; }
+  .blob.wiggle, .blob.enter, .puck, #edges line.edge-ok, .ghost .g-draw, .ghost .g-fill, .ghost .g-label, .ghost-draw { animation: none; }
 }

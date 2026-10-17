@@ -133,7 +133,7 @@ window.MB_DEMO = {
     numerical: {
       title: "9.1 Numerical Expressions",
       summary: "A [[numexpr|numerical expression]] is made of numbers and [[operation|operations]]: add, subtract, multiply, divide, or raise to a power with an [[exponent|exponent]]. To [[evaluate|evaluate]] one you follow the [[order|order of operations]], and [[parens|parentheses]] let you choose what is done first. The [[properties|properties of operations]], such as the [[distributive|distributive property]], let you rewrite an expression in a different form. Expressions that keep the same value this way are [[equivexpr|equivalent expressions]].",
-      types: ["needs","special","reveals","part"],
+      types: ["needs", "special", "reveals", "part"],
       blobs: [
         { id: "numexpr", u: 0.69, v: 0.49, s: 94, c: "#F2B544" },
         { id: "order", u: 0.46, v: 0.51, s: 112, c: "#2B3A55" },
@@ -152,10 +152,10 @@ window.MB_DEMO = {
         { from: "evaluate", to: "order", type: "needs" },
         { from: "order", to: "operation", type: "needs" },
         { from: "exponent", to: "operation", type: "special" },
-        { from: "parens", to: "order", type: "part" },
-        { from: "exponent", to: "order", type: "part" },
+        { from: "parens", to: "order", type: "part", alt: [{ type: "needs", flip: true }] },
+        { from: "exponent", to: "order", type: "part", alt: [{ type: "needs", flip: true }] },
         { from: "equivexpr", to: "evaluate", type: "needs", tier: "valid" },
-        { from: "operation", to: "numexpr", type: "part", tier: "valid" },
+        { from: "operation", to: "numexpr", type: "part", tier: "valid", alt: [{ type: "needs", flip: true }] },
         { from: "properties", to: "operation", type: "needs", tier: "valid" },
         { from: "properties", to: "equivexpr", type: "reveals", tier: "valid" },
         { from: "distributive", to: "parens", type: "needs", tier: "valid" },
@@ -167,7 +167,7 @@ window.MB_DEMO = {
     expressions: {
       title: "9.2 Expressions with Variables",
       summary: "An [[expression|expression]] is built from numbers and [[variable|variables]], like 3x + 5. Each part joined by + or − is a [[term|term]]. The number multiplying a variable is its [[coefficient|coefficient]], and a [[constant|constant]] is a term with no variable. [[liketerms|Like terms]] have the same variable part, so you can combine them to [[simplify|simplify]] the expression. Looking at its [[structure|structure]] can show you its [[zeros|zeros]] without any calculating.",
-      types: ["part","special","needs","reveals"],
+      types: ["part", "special", "needs", "reveals"],
       blobs: [
         { id: "expression", u: 0.49, v: 0.47, s: 112, c: "#2B3A55" },
         { id: "variable", u: 0.65, v: 0.72, s: 102, c: "#F2B544" },
@@ -180,8 +180,8 @@ window.MB_DEMO = {
         { id: "zeros", u: 0.81, v: 0.37, s: 94, c: "#B9A5D6" }
       ],
       edges: [
-        { from: "variable", to: "expression", type: "part" },
-        { from: "term", to: "expression", type: "part" },
+        { from: "variable", to: "expression", type: "part", alt: [{ type: "needs", flip: true }] },
+        { from: "term", to: "expression", type: "part", alt: ["special", { type: "needs", flip: true }] },
         { from: "coefficient", to: "term", type: "part" },
         { from: "constant", to: "term", type: "special" },
         { from: "simplify", to: "liketerms", type: "needs" },
@@ -204,7 +204,7 @@ window.MB_DEMO = {
     equations: {
       title: "9.3a Equations and Solutions",
       summary: "An [[equation|equation]] says that two [[expression|expressions]] have the same value, and the [[equalsign|equal sign]] is what says it. A [[solution|solution]] is a value of the variable that makes the equation true, and the [[solset|solution set]] is all of those values together. If every value works, the equation is an [[identity|identity]], and its two sides are [[equivexpr|equivalent expressions]]. If only some values work, it is a [[conditional|conditional equation]]. If none work, it is a [[nosolution|no-solution equation]].",
-      types: ["needs","special","contrasts","part","reveals"],
+      types: ["needs", "special", "contrasts", "part", "reveals"],
       blobs: [
         { id: "equation", u: 0.47, v: 0.48, s: 112, c: "#2B3A55" },
         { id: "expression", u: 0.68, v: 0.69, s: 90, c: "#F2B544" },
@@ -217,14 +217,14 @@ window.MB_DEMO = {
         { id: "equivexpr", u: 0.57, v: 0.31, s: 90, c: "#B9A5D6" }
       ],
       edges: [
-        { from: "equation", to: "expression", type: "needs" },
+        { from: "equation", to: "expression", type: "needs", alt: [{ type: "part", flip: true }] },
         { from: "solution", to: "equation", type: "needs" },
         { from: "identity", to: "equation", type: "special" },
         { from: "conditional", to: "equation", type: "special" },
         { from: "identity", to: "conditional", type: "contrasts" },
-        { from: "equalsign", to: "equation", type: "part" },
+        { from: "equalsign", to: "equation", type: "part", alt: [{ type: "needs", flip: true }] },
         { from: "identity", to: "equivexpr", type: "needs" },
-        { from: "solution", to: "solset", type: "part", tier: "valid" },
+        { from: "solution", to: "solset", type: "part", tier: "valid", alt: [{ type: "needs", flip: true }] },
         { from: "nosolution", to: "equation", type: "special", tier: "valid" },
         { from: "identity", to: "nosolution", type: "contrasts", tier: "valid" },
         { from: "conditional", to: "nosolution", type: "contrasts", tier: "valid" },
@@ -242,7 +242,7 @@ window.MB_DEMO = {
     solvingeqs: {
       title: "9.3b Solving Equations",
       summary: "[[solving|Solving]] an [[equation|equation]] means finding the [[solution|solution]]: the value of the [[variable|variable]] that makes it true. A [[panbalance|pan balance]] pictures the equation as a level scale, so doing the same thing to both sides, a [[samesol|same-solution transformation]], keeps the solution safe. Each step usually uses an [[inverseop|inverse operation]] to undo what was done to the variable. To check an answer you [[evaluate|put it in]] and see whether both sides match.",
-      types: ["needs","models","reveals"],
+      types: ["needs", "models", "reveals", "part"],
       blobs: [
         { id: "equation", u: 0.59, v: 0.55, s: 98, c: "#F2B544" },
         { id: "solving", u: 0.45, v: 0.46, s: 112, c: "#2B3A55" },
@@ -257,7 +257,7 @@ window.MB_DEMO = {
         { from: "solution", to: "equation", type: "needs" },
         { from: "panbalance", to: "equation", type: "models" },
         { from: "panbalance", to: "samesol", type: "models" },
-        { from: "solving", to: "samesol", type: "needs" },
+        { from: "solving", to: "samesol", type: "needs", alt: [{ type: "part", flip: true }] },
         { from: "solving", to: "solution", type: "reveals" },
         { from: "solving", to: "equation", type: "needs" },
         { from: "samesol", to: "equation", type: "needs" },
@@ -277,7 +277,7 @@ window.MB_DEMO = {
     sequences: {
       title: "9.5a Arithmetic and Geometric Sequences",
       summary: "A [[sequence|sequence]] is a list in order, and each [[entry|entry]] sits at a [[position|position]]. The entry just before the 1st is the [[zeroth|0th entry]]. In an [[arithmetic|arithmetic sequence]] you add the same [[commondiff|common difference]] each time. In a [[geometric|geometric sequence]] you multiply by the same [[commonratio|common ratio]]. Taking the [[differences|differences]] between neighbors helps you see which kind you have.",
-      types: ["special","contrasts","needs","reveals"],
+      types: ["special", "contrasts", "needs", "reveals", "part"],
       blobs: [
         { id: "sequence", u: 0.48, v: 0.46, s: 112, c: "#2B3A55" },
         { id: "arithmetic", u: 0.64, v: 0.66, s: 98, c: "#F2B544" },
@@ -293,9 +293,9 @@ window.MB_DEMO = {
         { from: "arithmetic", to: "sequence", type: "special" },
         { from: "geometric", to: "sequence", type: "special" },
         { from: "arithmetic", to: "geometric", type: "contrasts" },
-        { from: "arithmetic", to: "commondiff", type: "needs" },
-        { from: "geometric", to: "commonratio", type: "needs" },
-        { from: "sequence", to: "entry", type: "needs", tier: "valid" },
+        { from: "arithmetic", to: "commondiff", type: "needs", alt: [{ type: "part", flip: true }] },
+        { from: "geometric", to: "commonratio", type: "needs", alt: [{ type: "part", flip: true }] },
+        { from: "sequence", to: "entry", type: "needs", tier: "valid", alt: [{ type: "part", flip: true }] },
         { from: "commondiff", to: "commonratio", type: "contrasts", tier: "valid" },
         { from: "entry", to: "position", type: "needs", tier: "valid" },
         { from: "commondiff", to: "entry", type: "needs", tier: "valid" },
@@ -316,7 +316,7 @@ window.MB_DEMO = {
     patterns: {
       title: "9.5b Patterns and Rules",
       summary: "A [[sequence|sequence]] can be described by a rule. An [[explicit|explicit rule]] gives any entry straight from its [[position|position]], and a [[recursive|recursive rule]] builds each entry from the one before it. A sequence is also a [[func|function]] of position. A [[repeating|repeating pattern]] cycles, and its [[cyclelength|cycle length]] says how many entries come before it starts over. To find what sits in a given position, use [[remainder|division with remainder]].",
-      types: ["special","needs","shownAs","contrasts"],
+      types: ["special", "needs", "shownAs", "contrasts"],
       blobs: [
         { id: "sequence", u: 0.48, v: 0.46, s: 112, c: "#2B3A55" },
         { id: "repeating", u: 0.63, v: 0.72, s: 102, c: "#F2B544" },
@@ -345,7 +345,7 @@ window.MB_DEMO = {
     functions: {
       title: "9.6a What Is a Function",
       summary: "A [[func|function]] gives exactly one [[output|output]] for each [[input|input]]. The [[indvar|independent variable]] stands for the input and the [[depvar|dependent variable]] stands for the output. The [[domain|domain]] is all the inputs allowed, and the [[range|range]] is the outputs that actually come out. An [[orderedpair|ordered pair]] writes one input with its output. On a graph, the [[vlt|vertical line test]] checks that no input has two outputs.",
-      types: ["needs","same","part"],
+      types: ["needs", "same", "part", "reveals"],
       blobs: [
         { id: "func", u: 0.49, v: 0.42, s: 112, c: "#2B3A55" },
         { id: "input", u: 0.62, v: 0.69, s: 102, c: "#F2B544" },
@@ -364,15 +364,15 @@ window.MB_DEMO = {
         { from: "indvar", to: "input", type: "same" },
         { from: "depvar", to: "output", type: "same" },
         { from: "depvar", to: "indvar", type: "needs" },
-        { from: "input", to: "orderedpair", type: "part", tier: "valid" },
-        { from: "output", to: "orderedpair", type: "part", tier: "valid" },
-        { from: "orderedpair", to: "func", type: "part", tier: "valid" },
-        { from: "domain", to: "func", type: "part", tier: "valid" },
-        { from: "range", to: "func", type: "part", tier: "valid" },
+        { from: "input", to: "orderedpair", type: "part", tier: "valid", alt: [{ type: "needs", flip: true }] },
+        { from: "output", to: "orderedpair", type: "part", tier: "valid", alt: [{ type: "needs", flip: true }] },
+        { from: "orderedpair", to: "func", type: "part", tier: "valid", alt: [{ type: "needs", flip: true }] },
+        { from: "domain", to: "func", type: "part", tier: "valid", alt: [{ type: "needs", flip: true }] },
+        { from: "range", to: "func", type: "part", tier: "valid", alt: [{ type: "needs", flip: true }] },
         { from: "range", to: "domain", type: "needs", tier: "valid" },
-        { from: "input", to: "domain", type: "part", tier: "valid" },
-        { from: "output", to: "range", type: "part", tier: "valid" },
-        { from: "vlt", to: "func", type: "needs", tier: "valid" },
+        { from: "input", to: "domain", type: "part", tier: "valid", alt: [{ type: "needs", flip: true }] },
+        { from: "output", to: "range", type: "part", tier: "valid", alt: [{ type: "needs", flip: true }] },
+        { from: "vlt", to: "func", type: "needs", tier: "valid", alt: ["reveals"] },
         { from: "func", to: "indvar", type: "needs", tier: "valid" },
         { from: "func", to: "depvar", type: "needs", tier: "valid" }
       ]
@@ -381,7 +381,7 @@ window.MB_DEMO = {
     representations: {
       title: "9.6b Representations and Rate",
       summary: "A [[func|function]] can be shown in different ways, called [[representation|representations]]: in words, as a [[table|table]], as a [[graph|graph]] or as an [[equation|equation]]. On a graph, the [[slope|slope]] tells you how steep the line is, which is the same as the [[rate|rate of change]]. The line crosses the y-axis at the [[yint|y-intercept]], which matches the [[zeroth|0th entry]] of the matching sequence.",
-      types: ["shownAs","same","special","part","needs"],
+      types: ["shownAs", "same", "special", "part", "needs"],
       blobs: [
         { id: "func", u: 0.67, v: 0.64, s: 104, c: "#F2B544" },
         { id: "representation", u: 0.48, v: 0.46, s: 112, c: "#2B3A55" },
@@ -413,7 +413,7 @@ window.MB_DEMO = {
     relationships: {
       title: "9.7a Linear and Proportional",
       summary: "A [[linear|linear function]] is a [[func|function]] with a constant [[rate|rate of change]], which is the same as its [[slope|slope]]. A [[slopetri|slope triangle]] drawn on its graph reveals that slope, and the line crosses the y-axis at the [[yint|y-intercept]]. A [[proportional|proportional relationship]] is a linear one that passes through the [[origin|origin]], and its [[constk|constant of proportionality]] is the slope.",
-      types: ["needs","special","reveals","same"],
+      types: ["needs", "special", "reveals", "same", "part"],
       blobs: [
         { id: "linear", u: 0.46, v: 0.48, s: 112, c: "#2B3A55" },
         { id: "func", u: 0.74, v: 0.49, s: 98, c: "#F2B544" },
@@ -429,7 +429,7 @@ window.MB_DEMO = {
         { from: "linear", to: "rate", type: "needs" },
         { from: "proportional", to: "linear", type: "special" },
         { from: "proportional", to: "origin", type: "needs" },
-        { from: "proportional", to: "constk", type: "needs" },
+        { from: "proportional", to: "constk", type: "needs", alt: [{ type: "part", flip: true }] },
         { from: "slopetri", to: "slope", type: "reveals" },
         { from: "rate", to: "slope", type: "same" },
         { from: "linear", to: "slope", type: "needs" },
@@ -452,7 +452,7 @@ window.MB_DEMO = {
     otherrelationships: {
       title: "9.7b Nonlinear Relationships",
       summary: "A [[linear|linear function]] has a constant rate of change, and a [[proportional|proportional relationship]] is a linear one through the origin. A [[nonlinear|nonlinear function]] is anything else. An [[inverse|inverse proportion]] makes a curve, a [[quadratic|quadratic function]] has constant second differences, and an [[exponential|exponential function]] multiplies by the same [[commonratio|growth factor]] each step. Checking the [[differences|differences]] tells you which kind you have. An [[arithmetic|arithmetic sequence]] acts like a linear function, and a [[geometric|geometric sequence]] acts like an exponential one.",
-      types: ["special","reveals","contrasts","needs"],
+      types: ["special", "reveals", "contrasts", "needs"],
       blobs: [
         { id: "nonlinear", u: 0.51, v: 0.45, s: 112, c: "#2B3A55", tier: "valid" },
         { id: "linear", u: 0.43, v: 0.64, s: 104, c: "#F2B544" },

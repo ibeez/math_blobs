@@ -88,9 +88,15 @@
   // ---------- answer key checks ----------
   const samePair = (a, b) => (a.from === b.from && a.to === b.to) || (a.from === b.to && a.to === b.from);
   // The key link a student's link counts as, if any (any tier; symmetric types match either way round).
+  // A key edge may list `alt` readings of the same pair: a type name (same direction) or
+  // { type, flip: true } (the other direction), e.g. "equation needs expression" also accepts "expression part of equation".
   function keyMatch(e) {
-    return lesson().edges.find((k) => k.type === e.type &&
-      ((k.from === e.from && k.to === e.to) || (typeOf(k.type).symmetric && k.from === e.to && k.to === e.from))) || null;
+    const reads = (type, from, to) => type === e.type &&
+      ((from === e.from && to === e.to) || (typeOf(type).symmetric && from === e.to && to === e.from));
+    return lesson().edges.find((k) => reads(k.type, k.from, k.to) || (k.alt || []).some((a) => {
+      const type = typeof a === "string" ? a : a.type, flip = typeof a !== "string" && a.flip;
+      return reads(type, flip ? k.to : k.from, flip ? k.from : k.to);
+    })) || null;
   }
   const coreTerms = () => lesson().blobs.filter((b) => b.tier !== "valid");
   const foundIds = () => new Set(map().blobs.map((b) => b.id));

@@ -86,28 +86,25 @@
   const nextEdgeId = () => 1 + Math.max(0, ...[...Object.values(S.maps), ...Object.values(S.work)].flatMap((m) => m.edges.map((e) => e.id)));
 
   // ---------- answer key checks ----------
-  const samePair = (a, b) => (a.from === b.from && a.to === b.to) || (a.from === b.to && a.to === b.from);
-  // The key link a student's link counts as, if any (any tier; symmetric types match either way round).
+  // Does the student's link e count as key link k? Symmetric types match either way round.
   // A key edge may list `alt` readings of the same pair: a type name (same direction) or
   // { type, flip: true } (the other direction), e.g. "equation needs expression" also accepts "expression part of equation".
-  function keyMatch(e) {
+  function matchesKey(e, k) {
     const reads = (type, from, to) => type === e.type &&
       ((from === e.from && to === e.to) || (typeOf(type).symmetric && from === e.to && to === e.from));
-    return lesson().edges.find((k) => reads(k.type, k.from, k.to) || (k.alt || []).some((a) => {
+    return reads(k.type, k.from, k.to) || (k.alt || []).some((a) => {
       const type = typeof a === "string" ? a : a.type, flip = typeof a !== "string" && a.flip;
       return reads(type, flip ? k.to : k.from, flip ? k.from : k.to);
-    })) || null;
+    });
   }
+  // The key link a student's link counts as, if any (any tier).
+  const keyMatch = (e) => lesson().edges.find((k) => matchesKey(e, k)) || null;
   const coreTerms = () => lesson().blobs.filter((b) => b.tier !== "valid");
   const foundIds = () => new Set(map().blobs.map((b) => b.id));
-  // Core key links whose pair has no accepted student link yet (one per pair).
+  // Core key links that no link on the student's map counts as yet.
   function missedCoreLinks() {
-    const w = map(), out = [];
-    for (const k of lesson().edges) {
-      if (k.tier === "valid" || out.some((o) => samePair(o, k))) continue;
-      if (!w.edges.some((e) => samePair(e, k) && keyMatch(e))) out.push(k);
-    }
-    return out;
+    const w = map();
+    return lesson().edges.filter((k) => k.tier !== "valid" && !w.edges.some((e) => matchesKey(e, k)));
   }
 
   // ---------- layout ----------
@@ -202,11 +199,25 @@
     }).join("") + "</defs>";
   }
   // Set a line's ends: start at a, stop at b's rim so the arrowhead is not hidden under the blob.
-  function place(l, a, b, type) {
+  // `off` shifts the line sideways (px) so several links between the same two blobs sit side by side.
+  function place(l, a, b, type, off = 0) {
     const t = typeOf(type), d = Math.hypot(b.x - a.x, b.y - a.y) || 1;
     const cut = t.symmetric ? 0 : Math.min(b.r + 3, d / 2);
-    l.setAttribute("x1", a.x); l.setAttribute("y1", a.y);
-    l.setAttribute("x2", a.x + (b.x - a.x) * (d - cut) / d); l.setAttribute("y2", a.y + (b.y - a.y) * (d - cut) / d);
+    const ox = -(b.y - a.y) / d * off, oy = (b.x - a.x) / d * off;
+    l.setAttribute("x1", a.x + ox); l.setAttribute("y1", a.y + oy);
+    l.setAttribute("x2", a.x + (b.x - a.x) * (d - cut) / d + ox); l.setAttribute("y2", a.y + (b.y - a.y) * (d - cut) / d + oy);
+  }
+  // Sideways offsets for links that share a pair of blobs: items are { from, to, key }; returns key -> px.
+  // Every pair is measured from the same end (lower id first), so the slots do not flip with link direction.
+  const LANE = 22;
+  function laneOffsets(items) {
+    const groups = {}, out = {};
+    for (const it of items) (groups[it.from < it.to ? it.from + "|" + it.to : it.to + "|" + it.from] ||= []).push(it);
+    for (const g of Object.values(groups)) g.forEach((it, i) => {
+      const o = (i - (g.length - 1) / 2) * LANE;
+      out[it.key] = it.from < it.to ? o : -o;   // line normals flip when a link is drawn the other way round
+    });
+    return out;
   }
   function edgeEl(e) {
     const t = typeOf(e.type);
@@ -255,18 +266,23 @@
       const p = P[el.dataset.id]; if (!p) continue;
       el.style.transform = `translate(${p.x - p.r}px, ${p.y - p.r}px)`;
     }
+    const ghosts = [...svg.querySelectorAll(".ghost-edge")];
+    const lanes = laneOffsets([
+      ...map().edges.map((e) => ({ from: e.from, to: e.to, key: "e" + e.id })),
+      ...ghosts.map((l, i) => ({ from: l.dataset.from, to: l.dataset.to, key: "g" + i })),
+    ]);
     for (const l of svg.querySelectorAll("line[data-edge]")) {
       const e = map().edges.find((x) => x.id == l.dataset.edge);
       const a = e && P[e.from], b = e && P[e.to];
       if (!a || !b) continue;
-      place(l, a, b, e.type);
+      place(l, a, b, e.type, lanes["e" + e.id]);
     }
-    for (const l of svg.querySelectorAll(".ghost-edge")) {
+    ghosts.forEach((l, i) => {
       const a = P[l.dataset.from] || G[l.dataset.from], b = P[l.dataset.to] || G[l.dataset.to];
-      if (!a || !b) { l.style.display = "none"; continue; }
+      if (!a || !b) { l.style.display = "none"; return; }
       l.style.display = "";
-      place(l, a, b, l.dataset.type);
-    }
+      place(l, a, b, l.dataset.type, lanes["g" + i]);
+    });
     const temp = $("#tempEdge");
     if (temp) {
       if (connect && connect.type && connect.cursor) {
@@ -321,9 +337,13 @@
         if (push > 0.5) active = true;
       }
     }
+    const pulled = new Set();   // one spring per pair of blobs, however many links join them
     for (const e of map().edges) {
       const a = P[e.from], b = P[e.to];
       if (!a || !b) continue;
+      const pk = e.from < e.to ? e.from + "|" + e.to : e.to + "|" + e.from;
+      if (pulled.has(pk)) continue;
+      pulled.add(pk);
       const dx = b.x - a.x, dy = b.y - a.y, d = Math.hypot(dx, dy) || 1;
       if (REST[e.id] == null) REST[e.id] = clamp(d, a.r + b.r + 40, 340);
       const stretch = d - REST[e.id];
@@ -530,8 +550,12 @@
   function finishConnect(to) {
     const { from, type } = connect;
     const m = map();
-    m.edges = m.edges.filter((e) => !((e.from === from && e.to === to) || (e.from === to && e.to === from)));
-    m.edges.push({ id: nextEdgeId(), from, to, type });
+    // Several links can join the same two blobs. Only the exact same link (same type, same direction,
+    // or either direction for "same as" style types) is not added twice.
+    const sym = typeOf(type).symmetric;
+    const dup = m.edges.some((e) => e.type === type &&
+      ((e.from === from && e.to === to) || (sym && e.from === to && e.to === from)));
+    if (!dup) m.edges.push({ id: nextEdgeId(), from, to, type });
     save();
     closeConnect();
     renderMap();   // no feedback here: links are only judged when the student presses "check"

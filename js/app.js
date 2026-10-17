@@ -2,7 +2,7 @@
   "use strict";
 
   // ---------- constants ----------
-  const STORE_KEY = "mathblobs.v3";   // v3: student work kept apart from the answer keys; old saves are ignored
+  const STORE_KEY = "mathblobs.v4";   // v4: ten-map lesson split; v3 saves still hold the old five maps and are ignored
   const TYPES = window.MB_DEMO.linkTypes;
   const DEFAULT_TYPES = ["special", "needs", "same", "contrasts"];
   const FALLBACK_TYPE = { label: "linked to", back: "linked to", short: "linked", c: "#A8A294", w: 5, dash: null };

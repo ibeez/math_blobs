@@ -53,7 +53,7 @@
   const G = {};      // ghost positions while the reveal is on: id -> {x, y, r}
   // Test mode (?test) switches off the hint features: summary, hint, show what's missing. Not saved.
   const TEST = new URLSearchParams(location.search).has("test");
-  let summaryOn = false;
+  const summaryOn = true;   // students see the summary at the top, always open
   const shown = new Set();   // terms revealed from the summary: they show as ghosts until dragged in
 
   function freshState() {
@@ -166,7 +166,7 @@
       const empty = document.createElement("div");
       empty.className = "empty-note";
       empty.style.cssText = "position:absolute;left:24px;right:24px;top:50%;transform:translateY(-50%);text-align:center;font:500 16px Outfit,system-ui,sans-serif;color:#A8A294";
-      empty.textContent = isKey() ? "This map is empty. Press + to add a term." : "Type a term you think belongs in this lesson, then press Enter.";
+      empty.textContent = isKey() ? "This map is empty. Press + to add a term." : TEST ? "Type a term you think belongs in this lesson, then press Enter." : "Tap a word in the summary above to find a term, then drag it in.";
       blobsEl.appendChild(empty);
     }
     renderChip();
@@ -1032,7 +1032,6 @@
   function renderSummary() {
     const box = $("#summary"), text = (window.MB_DEMO.maps[S.current] || {}).summary;
     box.hidden = !(summaryOn && !TEST && !isKey() && text);
-    $("#summaryBtn").setAttribute("aria-pressed", String(summaryOn));
     if (box.hidden) return;
     const found = foundIds(), inLesson = new Set(lesson().blobs.map((b) => b.id));
     box.innerHTML = esc(text).replace(/\[\[([^\]|]+)\|([^\]]+)\]\]/g, (all, id, t) =>
@@ -1044,7 +1043,6 @@
     renderGhosts();
     draw();
   }
-  $("#summaryBtn").addEventListener("click", () => { summaryOn = !summaryOn; renderSummary(); });
   $("#summary").addEventListener("click", (e) => { const t = e.target.closest("[data-sum]"); if (t) revealFromSummary(t.dataset.sum); });
   $("#summary").addEventListener("keydown", (e) => {
     const t = e.target.closest("[data-sum]");

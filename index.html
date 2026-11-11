@@ -52,6 +52,8 @@
 </button>
 
 <div class="corner-left">
+  <button id="pairBtn" class="pill-btn student-only" title="Leave and let another pair join" hidden></button>
+  <button id="exportBtn" class="pill-btn" title="Download every pair's maps saved on this device">export</button>
   <button id="resetBtn" class="pill-btn" title="Restore the demo lessons">reset</button>
   <button id="checkBtn" class="pill-btn student-only hint-feature" title="Check your links against the answer key">check my links</button>
   <button id="hintBtn" class="pill-btn student-only hint-feature" title="A nudge toward a term you have not found">hint</button>
@@ -94,6 +96,15 @@
       <button type="button" class="pill-btn" data-cancel>cancel</button>
       <button type="submit" class="pill-btn primary">add to map</button>
     </div>
+  </form>
+</div>
+
+<div id="joinLayer" class="add-layer join-layer" hidden>
+  <form id="joinForm" class="add-card join-card" autocomplete="off">
+    <div class="join-logo">mathblobs</div>
+    <input id="joinCode" type="text" placeholder="Class code" maxlength="20" autocapitalize="characters" spellcheck="false" required aria-label="Class code">
+    <input id="joinPair" type="text" placeholder="Pair name, like Ana + Ben" maxlength="40" spellcheck="false" required aria-label="Pair name">
+    <button type="submit" class="pill-btn primary join-go">join</button>
   </form>
 </div>
 

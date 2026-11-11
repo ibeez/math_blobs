@@ -2,7 +2,12 @@
   "use strict";
 
   // ---------- constants ----------
-  const STORE_KEY = "mathblobs.v4";   // v4: ten-map lesson split; v3 saves still hold the old five maps and are ignored
+  const BASE_KEY = "mathblobs.v4";   // v4: ten-map lesson split; v3 saves still hold the old five maps and are ignored
+  // Pair study: a pair joins with a class code and a pair name (no accounts); each pair's work is saved under its own key on this device.
+  const PLAYER_KEY = "mathblobs.player";
+  const getPlayer = () => { try { return JSON.parse(localStorage.getItem(PLAYER_KEY)); } catch (e) { return null; } };
+  const player = getPlayer();
+  const STORE_KEY = player && player.pair ? `${BASE_KEY}:${player.code}:${player.pair}` : BASE_KEY;
   const TYPES = window.MB_DEMO.linkTypes;
   const DEFAULT_TYPES = ["special", "needs", "same", "contrasts"];
   const FALLBACK_TYPE = { label: "linked to", back: "linked to", short: "linked", c: "#A8A294", w: 5, dash: null };
@@ -1164,6 +1169,44 @@
     rsz = setTimeout(() => { writeBack(); layout(); placeFromData(); draw(); if (connect) placeMenu(); }, 60);
   });
 
+  // ---------- join, leave, export ----------
+  function showJoin() {
+    $("#joinLayer").hidden = false;
+    $("#joinCode").value = (player && player.code) || "";
+    ($("#joinCode").value ? $("#joinPair") : $("#joinCode")).focus();
+  }
+  $("#joinForm").addEventListener("submit", (e) => {
+    e.preventDefault();
+    const code = $("#joinCode").value.trim().toUpperCase(), pair = $("#joinPair").value.trim();
+    if (!code || !pair) return;
+    try { localStorage.setItem(PLAYER_KEY, JSON.stringify({ code, pair })); } catch (err) { /* ignore */ }
+    location.reload();
+  });
+  $("#pairBtn").addEventListener("click", () => {
+    if (!confirm("Leave? Your map stays saved on this device, and you can join again with the same code and pair name.")) return;
+    save();
+    try { localStorage.setItem(PLAYER_KEY, JSON.stringify({ code: player.code })); } catch (e) { /* ignore */ }
+    location.reload();
+  });
+  $("#exportBtn").addEventListener("click", () => {
+    save();
+    const out = { exported: new Date().toISOString(), pairs: [] };
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i), m = k.match(/^mathblobs\.v4:([^:]*):(.*)$/);
+      if (!m) continue;
+      try {
+        const st = JSON.parse(localStorage.getItem(k));
+        out.pairs.push({ code: m[1], pair: m[2], work: st.work });
+      } catch (e) { /* skip a broken save */ }
+    }
+    if (!out.pairs.length) { say("No pair has joined on this device yet."); return; }
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([JSON.stringify(out, null, 2)], { type: "application/json" }));
+    a.download = `mathblobs-export-${out.exported.slice(0, 10)}.json`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  });
+
   // ---------- boot ----------
   S = load();
   const startMap = decodeURIComponent(location.hash.slice(1));
@@ -1174,6 +1217,9 @@
   document.body.classList.toggle("test-mode", TEST);
   $("#testBadge").hidden = !TEST;
   applyModeUI();
+  const joined = player && player.pair;
+  if (!isKey() && !joined) showJoin();
+  if (joined) { $("#pairBtn").hidden = false; $("#pairBtn").textContent = `${player.pair} · leave`; }
   history.replaceState(null, "", location.search + "#" + encodeURIComponent(S.current));   // keep ?test on reload
   layout();
   placeFromData();

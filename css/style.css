@@ -288,3 +288,12 @@ body.panel-open .switcher { right: 358px; }
   .add-body { flex-direction: column; align-items: center; }
   .add-fields { width: 100%; }
 }
+
+/* ---------- join (pair study: class code + pair name, saved on this device) ---------- */
+.join-layer { background: var(--paper); backdrop-filter: none; z-index: 30; }
+.join-card { width: min(340px, 100%); display: flex; flex-direction: column; gap: 12px; padding: 26px 22px; }
+.join-logo { font: 700 24px var(--font); text-align: center; margin-bottom: 6px; }
+.join-card input { width: 100%; border: 0; border-radius: 12px; background: var(--paper); padding: 12px 14px; font: 600 16px var(--font); color: var(--ink); text-align: center; }
+.join-card input::placeholder { color: var(--muted); font-weight: 500; }
+.join-go { height: 44px; font-size: 15px; }
+#pairBtn[hidden] { display: none; }
